@@ -15,11 +15,7 @@ logger = logging.Logger(__name__)
 URL_STATUS_OK = 200
 TIMEOUT_SECS = 20
 
-headers={
-    "User-Agent":"Mozilla",
-    "Content-Type":"application/json;charset=UTF-8"
-    }
-def url_request_get(url: str):
+def url_get(url: str):
     resp = requests.get(url, timeout=TIMEOUT_SECS, headers={"User-Agent":"Mozilla"})
     if resp.status_code == URL_STATUS_OK:
         return resp.content.decode()
@@ -31,7 +27,10 @@ def url_request_get(url: str):
     #     else:
     #         raise Exception(f'{u.url} URL request failed {u.reason}')
 
-def url_request_post(url: str):
+def url_get_json(url: str):
+    return json.loads(url_get(url))
+
+def url_post(url: str):
     resp = requests.post(url, timeout=TIMEOUT_SECS)
     if resp.status_code == URL_STATUS_OK:
         return resp.content.decode()
@@ -109,13 +108,7 @@ def load_cme_prices(contract_type: str = 'SOFR Futures'):
 CFETS_FX_URL = 'https://iftp.chinamoney.com.cn/r/cms/www/chinamoney/data/fx/fx-sw-curv-USD.CNY.json'
 CFETS_DATE_FORMAT = '%Y-%m-%d'
 def load_cfets_fx() -> tuple[dtm.date, list[tuple[str, float, dtm.date]]]:
-    with urlreq.urlopen(CFETS_FX_URL, timeout=TIMEOUT_SECS) as u:
-        if u.status == URL_STATUS_OK:
-            content = u.read().decode()
-        else:
-            raise Exception(f'{u.url} URL request failed {u.reason}')
-    
-    content_json = json.loads(content)
+    content_json = url_get_json(CFETS_FX_URL)
     content_data = content_json["data"]
     tenors = content_data["voArray"]
     data_date = dtm.datetime.strptime(content_data["showDateCN"], CFETS_DATE_FORMAT).date()
@@ -129,13 +122,7 @@ def load_cfets_fx() -> tuple[dtm.date, list[tuple[str, float, dtm.date]]]:
 
 CFETS_SPOT_URL = 'https://iftp.chinamoney.com.cn/r/cms/www/chinamoney/data/fx/ccpr.json'
 def load_cfets_spot() -> dict[str, tuple[str, float]]:
-    with urlreq.urlopen(CFETS_SPOT_URL, timeout=TIMEOUT_SECS) as u:
-        if u.status == URL_STATUS_OK:
-            content = u.read().decode()
-        else:
-            raise Exception(f'{u.url} URL request failed {u.reason}')
-    
-    content_json = json.loads(content)
+    content_json = url_get_json(CFETS_SPOT_URL)
     content_data = content_json["records"]
     res = {}
     for rec in content_data:
@@ -149,7 +136,7 @@ CFETS_SWAPS_CODEMAP = {
 }
 def load_cfets_swaps(fixing_type: str = 'FR007') -> tuple[dtm.date, dict[str, float]]:
     swaps_url = CFETS_SWAPS_URL.format(code=CFETS_SWAPS_CODEMAP[fixing_type])
-    content = url_request_post(swaps_url)
+    content = url_post(swaps_url)
     content_json = json.loads(content)
     content_metadata = content_json["data"]
     data_date = dtm.datetime.strptime(content_metadata["showDateCN"], CFETS_DATE_FORMAT).date()
@@ -162,7 +149,7 @@ def load_cfets_swaps(fixing_type: str = 'FR007') -> tuple[dtm.date, dict[str, fl
 CFETS_FIXINGS_URL = 'https://iftp.chinamoney.com.cn/r/cms/www/chinamoney/data/currency/frr.json'
 CFETS_FIXINGS_DATE_FORMAT = '%Y-%m-%d %H:%M'
 def load_cfets_fixings() -> tuple[dtm.date, dict[str, float]]:
-    content = url_request_post(CFETS_FIXINGS_URL)
+    content = url_post(CFETS_FIXINGS_URL)
     content_json = json.loads(content)
     content_metadata = content_json["data"]
     data_date = dtm.datetime.strptime(content_metadata["showDateCN"], CFETS_FIXINGS_DATE_FORMAT).date()
@@ -182,8 +169,7 @@ CME_FUTPROD_MAP = {
 CME_FUTPROD_COLUMNS = ['productCode', 'contractMonth', 'firstTrade', 'lastTrade', 'settlement']
 def load_cme_futs(code: str):
     fut_url = CME_FUTPROD_URL.format(code=CME_FUTPROD_MAP[code])
-    content = url_request_get(fut_url)
-    content_json = json.loads(content)
+    content_json = url_get_json(fut_url)
     content_df = pd.DataFrame(content_json)[CME_FUTPROD_COLUMNS]
     content_df.set_index(CME_FUTPROD_COLUMNS[0], inplace=True)
     for col in CME_FUTPROD_COLUMNS[-3:]:
@@ -201,8 +187,7 @@ CME_SWAP_MAP = {
     'FF': "sofrFedFundRates",
 }
 def load_cme_swap_data(fixing_type: str = 'SOFR') -> dict[dtm.date, dict[str, float]]:
-    content = url_request_get(CME_SWAP_URL)
-    content_json = json.loads(content)
+    content_json = url_get_json(CME_SWAP_URL)
     curves = content_json["resultsCurve"]
     res = {}
     for curve_i in curves:
