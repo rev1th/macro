@@ -6,10 +6,10 @@ import datetime as dtm
 import logging
 from sortedcontainers import SortedList
 
-from lib.date_utils import DayCount, get_bdate_series, date_to_int
+from lib.chrono import DayCount, get_bdate_series, date_to_int
 from lib.interpolator import Interpolator
 from lib import solver
-from lib.base_types import DataPoint, NamedDatedClass, get_fixing
+from model.base_types import DataPoint, NamedDatedClass, get_fixing
 
 logger = logging.Logger(__name__)
 

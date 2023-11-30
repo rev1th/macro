@@ -4,11 +4,11 @@ from dataclasses import field, KW_ONLY
 from typing import ClassVar
 import datetime as dtm
 
-from lib.date_utils import Tenor
+from lib.chrono import Tenor
 from .swap_convention import SwapConvention, SwapLegConvention
 from .abstract_instrument import BaseInstrument
 from .curve_instrument import CurveInstrument
-from rate_curve import YieldCurve
+from model.rate_curve import YieldCurve
 
 
 @dataclass

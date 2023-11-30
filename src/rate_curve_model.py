@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 
 from lib import solver
-from lib.base_types import NamedClass, NamedDatedClass
-from lib.date_utils import DayCount
+from model.base_types import NamedClass, NamedDatedClass
+from lib.chrono import DayCount
 from model.curve_instrument import CurveInstrument
 from model.rate_future import RateFutureC
 from model.swap import DomesticSwap, BasisSwap
 from model.fx import FXSpot, FXSwapC
-from rate_curve import YieldCurve
-from vol_curve import VolCurve
+from model.rate_curve import YieldCurve
+from model.vol_curve import VolCurve
 
 CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
@@ -27,7 +27,7 @@ logger = logging.Logger(__name__)
 
 
 @dataclass
-class YieldCurveDefinition(NamedClass):
+class YieldCurveModel(NamedClass):
 
     _instruments: list[CurveInstrument]
     _step_cutoff: Union[dtm.date, int] = None
@@ -100,11 +100,11 @@ class YieldCurveDefinition(NamedClass):
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
         if isinstance(instrument, FXSwapC):
             return instrument.get_pv(self.curve, ref_discount_curve=self.collateral_curve, spot=self.collateral_spot)
-        elif self != self.constructor.definitions[0]:
+        elif self != self.constructor.models[0]:
             if isinstance(instrument, DomesticSwap):
-                return instrument.get_pv(forecast_curve=self.curve, discount_curve=self.constructor.definitions[0].curve)
+                return instrument.get_pv(forecast_curve=self.curve, discount_curve=self.constructor.models[0].curve)
             elif isinstance(instrument, BasisSwap):
-                return instrument.get_pv(leg1_forecast_curve=self.curve, discount_curve=self.constructor.definitions[0].curve)
+                return instrument.get_pv(leg1_forecast_curve=self.curve, discount_curve=self.constructor.models[0].curve)
             else:
                 return instrument.get_pv(self.curve)
         else:
@@ -157,32 +157,32 @@ class YieldCurveDefinition(NamedClass):
 
 @dataclass
 class YieldCurveSetModel(NamedDatedClass):
-    _definitions: list[YieldCurveDefinition]
+    _models: list[YieldCurveModel]
     _calendar: str = ''
 
     def __post_init__(self):
-        for crv_def in self._definitions:
+        for crv_def in self._models:
             crv_def._constructor = self
     
     @property
-    def definitions(self) -> list[YieldCurveDefinition]:
-        return self._definitions
+    def models(self) -> list[YieldCurveModel]:
+        return self._models
     
     @property
     def knots(self) -> list[dtm.date]:
         knot_dates = set()
-        for crv_def in self.definitions:
+        for crv_def in self.models:
             knot_dates = knot_dates.union(crv_def.knots)
         return sorted(list(knot_dates))
     
     @property
     def curves(self) -> list[YieldCurve]:
-        return [crv_def.curve for crv_def in self.definitions]
+        return [crv_def.curve for crv_def in self.models]
     
     def build_terative(self, iter: int = 1) -> bool:
-        nodes_in = [deepcopy(crv_def.curve.nodes) for crv_def in self.definitions]
+        nodes_in = [deepcopy(crv_def.curve.nodes) for crv_def in self.models]
         for k in self.knots:
-            for crv_def in self.definitions:
+            for crv_def in self.models:
                 if k not in crv_def.knots:
                     continue
                 solver.find_root(
@@ -190,7 +190,7 @@ class YieldCurveSetModel(NamedDatedClass):
                     args=(k,),
                     bracket=[DF_LOWER_LIMIT, DF_UPPER_LIMIT]
                 )
-        for i, crv_def in enumerate(self.definitions):
+        for i, crv_def in enumerate(self.models):
             error = 0
             for j, nd in enumerate(crv_def.curve.nodes):
                 assert nodes_in[i][j].date == nd.date, f"Unexpected nodes mismatch {nodes_in[i][j]} {nd}"
@@ -203,17 +203,17 @@ class YieldCurveSetModel(NamedDatedClass):
         return True
     
     def build(self) -> bool:
-        for crv_def in self.definitions:
+        for crv_def in self.models:
             crv_def.reset(self.date)
         return self.build_terative()
     
     def calibrate_convexity(self, last_fixed_vol_date: dtm.date = None) -> None:
-        for con in self.definitions:
+        for con in self.models:
             con.calibrate_convexity(last_fixed_vol_date=last_fixed_vol_date)
         return
     
     def get_calibration_errors(self) -> list[pd.DataFrame]:
-        return pd.concat([con.get_calibration_errors() for con in self.definitions])
+        return pd.concat([con.get_calibration_errors() for con in self.models])
     
     def get_graph_info(self) -> tuple[dict[str, int], dict[str, int]]:
         fwd_rates = {}

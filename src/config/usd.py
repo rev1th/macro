@@ -2,15 +2,15 @@
 import datetime as dtm
 import logging
 
-import lib.date_utils as date_lib
-from lib.base_types import FIXING_CURVE_MAP
+import lib.chrono as date_lib
+from model.base_types import FIXING_CURVE_MAP
 from model.swap_convention import SWAP_CONVENTION_MAP
 from model.curve_instrument import Deposit
 from model.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
 import data_api.scraper as data_scraper
-from rate_curve_model import YieldCurveDefinition, YieldCurveSetModel
-from vol_curve import VolCurve
+from rate_curve_model import YieldCurveModel, YieldCurveSetModel
+from model.vol_curve import VolCurve
 
 logger = logging.Logger(__name__)
 
@@ -113,7 +113,7 @@ def construct():
     rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='OIS-Vol')
     swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff)
     curve_instruments = [deposit] + futs_crv + swaps
-    curve_defs = [YieldCurveDefinition(curve_instruments,
+    curve_defs = [YieldCurveModel(curve_instruments,
                                        _step_cutoff = mdt_sc,
                                        _rate_vol_curve=rate_vol_curve,
                                        name='OIS')]
@@ -130,7 +130,7 @@ def construct():
     ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='FF-Vol')
     ff_swaps = get_swaps_curve(val_dt, fixing_type='FF', cutoff=ff_fut_cutoff)
     ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
-    curve_defs.append(YieldCurveDefinition(ff_curve_instruments,
+    curve_defs.append(YieldCurveModel(ff_curve_instruments,
                                            _step_cutoff = ff_mdt_sc,
                                            _rate_vol_curve=ff_rate_vol_curve,
                                            name='FF'))

@@ -2,9 +2,9 @@
 import datetime as dtm
 import logging
 
-import lib.date_utils as date_lib
+import lib.chrono as date_lib
 import data_api.scraper as data_scraper
-from rate_curve_model import YieldCurveDefinition, YieldCurveSetModel
+from rate_curve_model import YieldCurveModel, YieldCurveSetModel
 from model.curve_instrument import Deposit
 from model.swap import DomesticSwap
 from model.currency import Currency
@@ -65,13 +65,13 @@ def construct(base_curve):
     val_date_xccy, spot_instrument, fxfwd_instruments = get_cny_fx_curve()
     cny_swaps_1 = get_cny_swaps_curve(fixing_type='FR007')
     curve_defs = [
-        YieldCurveDefinition(
+        YieldCurveModel(
             fxfwd_instruments,
             _daycount_type=date_lib.DayCount.ACT365,
             _collateral_curve=base_curve,
             _collateral_spot=spot_instrument,
             name='OIS'),
-        YieldCurveDefinition(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7D'),
-        # YieldCurveDefinition('3M', cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365),
+        YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7D'),
+        # YieldCurveModel('3M', cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365),
     ]
     return YieldCurveSetModel(val_date_xccy, curve_defs, _calendar='CN', name='CNY')

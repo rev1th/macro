@@ -6,8 +6,8 @@ import datetime as dtm
 from .abstract_instrument import BaseInstrument
 from .currency import Currency
 from .curve_instrument import CurveInstrument
-from lib.date_utils import Tenor
-from rate_curve import YieldCurve
+from lib.chrono import Tenor
+from model.rate_curve import YieldCurve
 
 
 @dataclass

@@ -1,7 +1,7 @@
 
 from dash import Dash, html, dash_table, dcc
 from dash import callback, Output, Input
-from lib import graph_utils
+from lib import plotter
 from main import evaluate
 
 app = Dash(__name__)
@@ -25,7 +25,7 @@ def load_main(*_):
     tabvals = []
     for ycs in evaluate():
         table = ycs.get_calibration_errors()
-        fig = graph_utils.get_curve_figure(*ycs.get_graph_info())
+        fig = plotter.get_curve_figure(*ycs.get_graph_info())
         tabvals.append(dcc.Tab([
             html.Button('Refresh Curve', id='refresh'),
             dcc.Graph(figure=fig),

@@ -3,7 +3,7 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 import datetime as dtm
 
-from lib.base_types import NamedClass
+from model.base_types import NamedClass
 from model.currency import Currency
 
 @dataclass

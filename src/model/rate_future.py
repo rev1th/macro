@@ -7,10 +7,10 @@ import numpy as np
 
 from .abstract_instrument import Future
 from .curve_instrument import CurveInstrument
-from lib.date_utils import Tenor, DayCount, get_bdate_series
-from lib.base_types import get_fixing
-from rate_curve import YieldCurve
-from vol_curve import VolCurve
+from lib.chrono import Tenor, DayCount, get_bdate_series
+from model.base_types import get_fixing
+from model.rate_curve import YieldCurve
+from model.vol_curve import VolCurve
 
 
 @dataclass

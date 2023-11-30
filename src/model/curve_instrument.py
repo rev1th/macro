@@ -5,8 +5,8 @@ from dataclasses import field, KW_ONLY
 import datetime as dtm
 
 from model.abstract_instrument import BaseInstrument
-from lib.date_utils import Tenor
-from rate_curve import YieldCurve
+from model.rate_curve import YieldCurve
+from lib.chrono import Tenor
 
 
 # BaseModel doesn't initialize private attributes

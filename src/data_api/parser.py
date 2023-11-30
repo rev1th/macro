@@ -4,7 +4,7 @@ from sortedcontainers import SortedDict
 
 from . import core as data_core
 from .scraper import CME_DATE_FORMAT
-from lib.base_types import FixingCurve
+from model.base_types import FixingCurve
 from model.rate_future import RateFutureIMM, RateFutureSerial
 from model.swap_convention import SwapLegConvention
 

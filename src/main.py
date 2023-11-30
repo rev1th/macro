@@ -2,7 +2,7 @@
 import logging
 
 from config import usd, cny
-from lib import graph_utils
+from lib import plotter
 
 logger = logging.Logger('')
 logger.setLevel(logging.DEBUG)
@@ -21,7 +21,7 @@ def evaluate():
 
 if __name__ == '__main__':
     for ycs in evaluate():
-        graph_utils.display_curves(*ycs.get_graph_info())
+        plotter.display_curves(*ycs.get_graph_info())
 
 # python -m src.data_api.scraper --fed
 
