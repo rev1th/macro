@@ -4,7 +4,7 @@ from dataclasses import field, KW_ONLY
 from typing import ClassVar
 import datetime as dtm
 
-from .date_utils import Tenor
+from lib.date_utils import Tenor
 from .swap_convention import SwapConvention, SwapLegConvention
 from .abstract_instrument import BaseInstrument
 from .curve_instrument import CurveInstrument
@@ -135,6 +135,10 @@ class SwapCommon(BaseInstrument):
     _leg1: ClassVar[SwapLeg] = None
     _leg2: ClassVar[SwapLeg] = None
     
+    def __post_init__(self):
+        if not self.name:
+            self.name = f'{self._index} {self._end}'
+    
     @property
     def index(self) -> SwapConvention:
         return SwapConvention(self._index)
@@ -184,6 +188,7 @@ class DomesticSwap(SwapCommonC):
     _float_leg: ClassVar[SwapLeg] = None
     
     def __post_init__(self):
+        super().__post_init__()
         assert self._fix_leg_id in (1, 2), f"Invalid fix leg specified {self._fix_leg_id}"
         self._fix_leg = SwapFixLeg(self.index.leg1, self._start, self._end, self.notional, _units=self._units)
         self._float_leg = SwapFloatLeg(self.index.leg2, self._start, self._end, -self.notional)
@@ -221,6 +226,7 @@ class BasisSwap(SwapCommonC):
     _spread: float = field(init=False)
 
     def __post_init__(self):
+        super().__post_init__()
         assert self._spread_leg_id in (1, 2), f"Invalid spread leg specified {self._spread_leg_id}"
         self._leg1 = SwapFloatLeg(self.index.leg1, self._start, self._end, self.notional, _units=self._units)
         self._leg2 = SwapFloatLeg(self.index.leg2, self._start, self._end, -self.notional, _units=self._units)

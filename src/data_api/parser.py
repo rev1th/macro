@@ -4,9 +4,9 @@ from sortedcontainers import SortedDict
 
 from . import core as data_core
 from .scraper import CME_DATE_FORMAT
-from lib.rate_future import RateFutureIMM, RateFutureSerial
 from lib.base_types import FixingCurve
-from lib.swap_convention import SwapLegConvention
+from model.rate_future import RateFutureIMM, RateFutureSerial
+from model.swap_convention import SwapLegConvention
 
 DATA_FOLDER = data_core.DATA_FOLDER
 DATE_FORMAT = CME_DATE_FORMAT
@@ -21,7 +21,7 @@ def read_fixings(filename: str, date_col: str, rate_col: str) -> FixingCurve:
     for d, v in date_rates.items():
         assert len(date_rates[d]) == 1
         res[d] = v[0] / 100
-    return FixingCurve(filename.split('.')[0], res)
+    return FixingCurve(res, name=filename.split('.')[0])
 
 def read_IMM_futures(filename: str,
                      underlying: str,
@@ -36,11 +36,11 @@ def read_IMM_futures(filename: str,
     for i in range(1, len(df_imm)):
         row = df_imm.iloc[i]
         expiries.append(RateFutureIMM(
-            row[name_col],
             underlying,
             _expiry=row[expiry_col],
             _settle=row[settle_col],
             _rate_start=df_imm.iloc[i-1][settle_col],
+            name=row[name_col],
         ))
 
     return expiries
@@ -53,9 +53,11 @@ def read_serial_futures(filename: str,
     df = pd.read_csv(data_core.data_path(filename), dtype=str)
     for col in [expiry_col, settle_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
-    expiries = [RateFutureSerial(r[name_col], underlying,
-                                 _expiry=r[expiry_col],
-                                 _settle=r[settle_col]) for _, r in df.iterrows()]
+    expiries = [RateFutureSerial(
+                    underlying,
+                    _expiry=r[expiry_col],
+                    _settle=r[settle_col],
+                    name=r[name_col]) for _, r in df.iterrows()]
     return expiries
 
 def read_meeting_dates(filename: str = 'meetingdates.csv', bank_col: str='Central Bank', date_col: str='Date',

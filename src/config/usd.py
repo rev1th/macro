@@ -4,16 +4,15 @@ import logging
 
 import lib.date_utils as date_lib
 from lib.base_types import FIXING_CURVE_MAP
-from lib.swap_convention import SWAP_CONVENTION_MAP
-from lib.curve_instrument import Deposit
-from lib.swap import DomesticSwap, BasisSwap
+from model.swap_convention import SWAP_CONVENTION_MAP
+from model.curve_instrument import Deposit
+from model.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
 import data_api.scraper as data_scraper
-from curve_construction import YieldCurveDefinition, YieldCurveSetConstructor
+from rate_curve_model import YieldCurveDefinition, YieldCurveSetModel
 from vol_curve import VolCurve
 
-logger = logging.Logger('')
-logger.setLevel(logging.DEBUG)
+logger = logging.Logger(__name__)
 
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
@@ -42,10 +41,10 @@ def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.d
     swap_instruments = []
     for tenor, rate in swap_prices[val_date].items():
         if fixing_type == 'FF':
-            ins = BasisSwap(f'{swap_index}_{tenor}', _index=swap_index, _end=date_lib.Tenor(tenor))
+            ins = BasisSwap(_index=swap_index, _end=date_lib.Tenor(tenor), name=f'{swap_index}_{tenor}')
             ins.set_market(val_date, rate)
         elif fixing_type == 'SOFR':
-            ins = DomesticSwap(f'{swap_index}_{tenor}', _index=swap_index, _end=date_lib.Tenor(tenor))
+            ins = DomesticSwap(_index=swap_index, _end=date_lib.Tenor(tenor), name=f'{swap_index}_{tenor}')
             ins.set_market(val_date, rate)
         if cutoff and ins.end_date <= cutoff:
             ins.exclude_knot = True
@@ -99,7 +98,7 @@ def construct():
     meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)
 
     # SOFR - OIS
-    deposit = Deposit('SOFR', next_btenor)  # meeting_dates_eff[0])
+    deposit = Deposit(next_btenor, name='SOFR')  # meeting_dates_eff[0])
     deposit.set_market(val_dt, sofr_rates.get_last_value())
 
     fut_cutoff = date_lib.Tenor('30m').get_date(val_dt)
@@ -111,15 +110,16 @@ def construct():
 
     futs_crv = get_futures_for_curve(fut_instruments, val_dt, contract_type='SOFR')
     usd_rate_vol = 1.4/100
-    rate_vol_curve = VolCurve('OIS-Vol', val_dt, [(val_dt, usd_rate_vol)])
+    rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='OIS-Vol')
     swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff)
     curve_instruments = [deposit] + futs_crv + swaps
-    curve_defs = [YieldCurveDefinition('OIS', curve_instruments,
+    curve_defs = [YieldCurveDefinition(curve_instruments,
                                        _step_cutoff = mdt_sc,
-                                       _rate_vol_curve=rate_vol_curve)]
+                                       _rate_vol_curve=rate_vol_curve,
+                                       name='OIS')]
 
     # Fed fund
-    ff_deposit = Deposit('EFFR', next_btenor)
+    ff_deposit = Deposit(next_btenor, name='EFFR')
     ff_deposit.set_market(val_dt, ff_rates.get_last_value())
 
     ff_fut_cutoff = date_lib.Tenor('13m').get_date(val_dt)
@@ -127,12 +127,13 @@ def construct():
     ff_mdt_sc = set_step_knots(ff_futs, meeting_dates_eff)
     
     ff_futs_crv = get_futures_for_curve(ff_futs, val_dt, contract_type='FF')
-    ff_rate_vol_curve = VolCurve('FF-Vol', val_dt, [(val_dt, usd_rate_vol)])
+    ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='FF-Vol')
     ff_swaps = get_swaps_curve(val_dt, fixing_type='FF', cutoff=ff_fut_cutoff)
     ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
-    curve_defs.append(YieldCurveDefinition('FF', ff_curve_instruments,
+    curve_defs.append(YieldCurveDefinition(ff_curve_instruments,
                                            _step_cutoff = ff_mdt_sc,
-                                           _rate_vol_curve=ff_rate_vol_curve))
+                                           _rate_vol_curve=ff_rate_vol_curve,
+                                           name='FF'))
     
-    return YieldCurveSetConstructor('USD', val_dt, curve_defs, _calendar=us_cal)
+    return YieldCurveSetModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
 

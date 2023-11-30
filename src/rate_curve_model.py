@@ -10,10 +10,10 @@ import pandas as pd
 from lib import solver
 from lib.base_types import NamedClass, NamedDatedClass
 from lib.date_utils import DayCount
-from lib.curve_instrument import CurveInstrument
-from lib.rate_future import RateFutureC
-from lib.swap import DomesticSwap, BasisSwap
-from lib.fx import FXSpot, FXSwapC
+from model.curve_instrument import CurveInstrument
+from model.rate_future import RateFutureC
+from model.swap import DomesticSwap, BasisSwap
+from model.fx import FXSpot, FXSwapC
 from rate_curve import YieldCurve
 from vol_curve import VolCurve
 
@@ -80,9 +80,10 @@ class YieldCurveDefinition(NamedClass):
             if self._daycount_type:
                 kwargs['_daycount_type'] = self._daycount_type
             self._curve = YieldCurve(
-                f"{self.constructor.name}-{self.name}", date,
+                date,
                 [(k, 1) for k in self.knots],
                 _calendar = self.constructor._calendar,
+                name=f"{self.constructor.name}-{self.name}",
                 **kwargs
             )
             if self.vol_curve:
@@ -155,7 +156,7 @@ class YieldCurveDefinition(NamedClass):
 
 
 @dataclass
-class YieldCurveSetConstructor(NamedDatedClass):
+class YieldCurveSetModel(NamedDatedClass):
     _definitions: list[YieldCurveDefinition]
     _calendar: str = ''
 

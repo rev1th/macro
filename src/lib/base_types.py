@@ -1,5 +1,6 @@
 
 from pydantic.dataclasses import dataclass
+from dataclasses import field
 import datetime as dtm
 from sortedcontainers import SortedDict
 
@@ -26,8 +27,8 @@ class DataPoint():
 
 
 @dataclass()
-class NamedClass():
-    name: str
+class NamedClass:
+    name: str = field(kw_only=True, default=None)
 
     # @property
     # def name(self) -> str:

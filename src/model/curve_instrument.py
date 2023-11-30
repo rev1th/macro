@@ -4,8 +4,8 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 import datetime as dtm
 
-from .abstract_instrument import BaseInstrument
-from .date_utils import Tenor
+from model.abstract_instrument import BaseInstrument
+from lib.date_utils import Tenor
 from rate_curve import YieldCurve
 
 
@@ -17,8 +17,8 @@ class CurveInstrument(BaseInstrument):
     _: KW_ONLY
     _notional: float = 1000000
     
-    _knot: dtm.date = field(init=False, default=None)
-    exclude_knot: bool = field(init=False, default=False)
+    _knot: dtm.date = None
+    exclude_knot: bool = False
 
     @property
     def end(self):

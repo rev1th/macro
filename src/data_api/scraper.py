@@ -15,8 +15,8 @@ logger = logging.Logger(__name__)
 URL_STATUS_OK = 200
 TIMEOUT_SECS = 20
 
-def url_get(url: str):
-    resp = requests.get(url, timeout=TIMEOUT_SECS, headers={"User-Agent":"Mozilla"})
+def url_get(url: str, params: dict[str, any] = None):
+    resp = requests.get(url, params=params, timeout=TIMEOUT_SECS, headers={"User-Agent":"Mozilla"})
     if resp.status_code == URL_STATUS_OK:
         return resp.content.decode()
     else:
@@ -27,11 +27,11 @@ def url_get(url: str):
     #     else:
     #         raise Exception(f'{u.url} URL request failed {u.reason}')
 
-def url_get_json(url: str):
-    return json.loads(url_get(url))
+def url_get_json(url: str, params: dict[str, any] = None):
+    return json.loads(url_get(url, params=params))
 
-def url_post(url: str):
-    resp = requests.post(url, timeout=TIMEOUT_SECS)
+def url_post(url: str, params: dict[str, any] = None):
+    resp = requests.post(url, params=params, timeout=TIMEOUT_SECS)
     if resp.status_code == URL_STATUS_OK:
         return resp.content.decode()
     else:
@@ -59,7 +59,6 @@ CME_PRICE_MAP = {
     'SOFR': 'SOFR Futures',
     'FF': 'Federal Fund Futures',
 }
-
 # Inspired by https://gist.github.com/tristanwietsma/5486236
 def load_cme_prices(contract_type: str = 'SOFR Futures'):
     with urlreq.urlopen(CME_FTP_URL, timeout=TIMEOUT_SECS) as u:
@@ -129,14 +128,15 @@ def load_cfets_spot() -> dict[str, tuple[str, float]]:
         res[rec['foreignCName']] = (rec['vrtEName'], float(rec['price']))
     return res
 
-CFETS_SWAPS_URL = 'https://iftp.chinamoney.com.cn/ags/ms/cm-u-bk-shibor/Ifcc?lang=EN&cfgItemType={code}'
+CFETS_SWAPS_URL = 'https://www.chinamoney.com.cn/ags/ms/cm-u-bk-shibor/Ifcc'
+# CFETS_SWAPS_URL = 'https://iftp.chinamoney.com.cn/ags/ms/cm-u-bk-shibor/Ifcc'
+# '?lang=EN&cfgItemType={code}'
 CFETS_SWAPS_CODEMAP = {
     'Shibor3M': 71,
     'FR007': 72,
 }
 def load_cfets_swaps(fixing_type: str = 'FR007') -> tuple[dtm.date, dict[str, float]]:
-    swaps_url = CFETS_SWAPS_URL.format(code=CFETS_SWAPS_CODEMAP[fixing_type])
-    content = url_post(swaps_url)
+    content = url_get(CFETS_SWAPS_URL, params={'cfgItemType': CFETS_SWAPS_CODEMAP[fixing_type]})
     content_json = json.loads(content)
     content_metadata = content_json["data"]
     data_date = dtm.datetime.strptime(content_metadata["showDateCN"], CFETS_DATE_FORMAT).date()
@@ -196,7 +196,8 @@ def load_cme_swap_data(fixing_type: str = 'SOFR') -> dict[dtm.date, dict[str, fl
     return res
 
 
-NYFED_URL = 'https://markets.newyorkfed.org/read?startDt={start}&eventCodes={codes}&productCode=50&sort=postDt:-1,eventCode:1&format=csv'
+NYFED_URL = 'https://markets.newyorkfed.org/read'
+# '?startDt={start}&eventCodes={codes}&productCode=50&sort=postDt:-1,eventCode:1&format=csv'
 NYFED_URL_DATE_FORMAT = '%Y-%m-%d'
 NYFED_URL_CODEMAP = {
     'SOFR': 520,
@@ -205,12 +206,14 @@ NYFED_URL_CODEMAP = {
 def load_fed_data(code: str, start: dtm.date = dtm.date(2023, 1, 1), save: bool = False):
     if code not in NYFED_URL_CODEMAP:
         raise Exception(f'{code} not found in URL mapping')
-    fed_url = NYFED_URL.format(start=start.strftime(NYFED_URL_DATE_FORMAT), codes=NYFED_URL_CODEMAP[code])
-    with urlreq.urlopen(fed_url) as u:
-        if u.status == URL_STATUS_OK:
-            content = u.read().decode()
-        else:
-            raise Exception(f'{u.url} URL request failed {u.reason}')
+    params = {
+        'startDt': start.strftime(NYFED_URL_DATE_FORMAT),
+        'eventCodes': NYFED_URL_CODEMAP[code],
+        'productCode': 50,
+        'sort': 'postDt:-1,eventCode:1',
+        'format': 'csv',
+    }
+    content = url_get(NYFED_URL, params=params)
 
     if save:
         filename = os.path.join(data_core.data_path(code, 'csv'))
