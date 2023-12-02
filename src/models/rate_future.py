@@ -5,12 +5,12 @@ from typing import ClassVar
 import datetime as dtm
 import numpy as np
 
-from .abstract_instrument import Future
-from .curve_instrument import CurveInstrument
+from models.abstract_instrument import Future
+from models.curve_instrument import CurveInstrument
 from lib.chrono import Tenor, DayCount, get_bdate_series
-from model.base_types import get_fixing
-from model.rate_curve import YieldCurve
-from model.vol_curve import VolCurve
+from models.base_types import get_fixing
+from models.rate_curve import YieldCurve
+from models.vol_curve import VolCurve
 
 
 @dataclass

@@ -9,7 +9,7 @@ from sortedcontainers import SortedList
 from lib.chrono import DayCount, get_bdate_series, date_to_int
 from lib.interpolator import Interpolator
 from lib import solver
-from model.base_types import DataPoint, NamedDatedClass, get_fixing
+from models.base_types import DataPoint, NamedDatedClass, get_fixing
 
 logger = logging.Logger(__name__)
 

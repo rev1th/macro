@@ -7,7 +7,7 @@ import logging
 
 from lib.chrono import date_to_int
 from lib.interpolator import Interpolator
-from model.base_types import DataPoint, NamedDatedClass
+from models.base_types import DataPoint, NamedDatedClass
 
 logger = logging.Logger(__name__)
 

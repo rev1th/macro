@@ -3,7 +3,7 @@ from pydantic.dataclasses import dataclass
 from enum import Enum
 
 from lib.chrono import Tenor, Frequency, DayCount, BDayAdjust
-from .currency import Currency
+from models.currency import Currency
 
 
 @dataclass(frozen=True)

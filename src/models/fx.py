@@ -3,11 +3,11 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 import datetime as dtm
 
-from .abstract_instrument import BaseInstrument
-from .currency import Currency
-from .curve_instrument import CurveInstrument
 from lib.chrono import Tenor
-from model.rate_curve import YieldCurve
+from models.abstract_instrument import BaseInstrument
+from models.currency import Currency
+from models.curve_instrument import CurveInstrument
+from models.rate_curve import YieldCurve
 
 
 @dataclass

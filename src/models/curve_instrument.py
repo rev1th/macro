@@ -4,8 +4,8 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 import datetime as dtm
 
-from model.abstract_instrument import BaseInstrument
-from model.rate_curve import YieldCurve
+from models.abstract_instrument import BaseInstrument
+from models.rate_curve import YieldCurve
 from lib.chrono import Tenor
 
 

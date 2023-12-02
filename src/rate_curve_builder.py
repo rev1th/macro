@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 
 from lib import solver
-from model.base_types import NamedClass, NamedDatedClass
+from models.base_types import NamedClass, NamedDatedClass
 from lib.chrono import DayCount
-from model.curve_instrument import CurveInstrument
-from model.rate_future import RateFutureC
-from model.swap import DomesticSwap, BasisSwap
-from model.fx import FXSpot, FXSwapC
-from model.rate_curve import YieldCurve
-from model.vol_curve import VolCurve
+from models.curve_instrument import CurveInstrument
+from models.rate_future import RateFutureC
+from models.swap import DomesticSwap, BasisSwap
+from models.fx import FXSpot, FXSwapC
+from models.rate_curve import YieldCurve
+from models.vol_curve import VolCurve
 
 CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6

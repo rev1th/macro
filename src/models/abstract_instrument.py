@@ -3,8 +3,8 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 import datetime as dtm
 
-from model.base_types import NamedClass
-from model.currency import Currency
+from models.base_types import NamedClass
+from models.currency import Currency
 
 @dataclass
 class BaseInstrument(NamedClass):

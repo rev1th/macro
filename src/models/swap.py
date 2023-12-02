@@ -5,10 +5,10 @@ from typing import ClassVar
 import datetime as dtm
 
 from lib.chrono import Tenor
-from .swap_convention import SwapConvention, SwapLegConvention
-from .abstract_instrument import BaseInstrument
-from .curve_instrument import CurveInstrument
-from model.rate_curve import YieldCurve
+from models.abstract_instrument import BaseInstrument
+from models.swap_convention import SwapConvention, SwapLegConvention
+from models.curve_instrument import CurveInstrument
+from models.rate_curve import YieldCurve
 
 
 @dataclass

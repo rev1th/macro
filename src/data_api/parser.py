@@ -4,9 +4,9 @@ from sortedcontainers import SortedDict
 
 from . import core as data_core
 from .scraper import CME_DATE_FORMAT
-from model.base_types import FixingCurve
-from model.rate_future import RateFutureIMM, RateFutureSerial
-from model.swap_convention import SwapLegConvention
+from models.base_types import FixingCurve
+from models.rate_future import RateFutureIMM, RateFutureSerial
+from models.swap_convention import SwapLegConvention
 
 DATA_FOLDER = data_core.DATA_FOLDER
 DATE_FORMAT = CME_DATE_FORMAT
