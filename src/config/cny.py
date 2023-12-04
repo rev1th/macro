@@ -5,7 +5,7 @@ import logging
 import lib.chrono as date_lib
 import data_api.scraper as data_scraper
 from rate_curve_builder import YieldCurveModel, YieldCurveSetModel
-from models.curve_instrument import Deposit
+from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap
 from models.currency import Currency
 from models.fx import FXSwapC, FXSpot

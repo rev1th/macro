@@ -7,7 +7,7 @@ from sortedcontainers import SortedDict
 
 # frozen=True generates hash function and makes it immutable
 @dataclass(frozen=True)
-class DataPoint():
+class DataPoint:
     date: dtm.date
     value: float = 0
     
@@ -26,6 +26,7 @@ class DataPoint():
         return (self.date == other.date) and (self.value == other.value)
 
 
+# Mixin/Traits
 @dataclass()
 class NamedClass:
     name: str = field(kw_only=True, default=None)
@@ -33,7 +34,6 @@ class NamedClass:
     # @property
     # def name(self) -> str:
     #     return self._name
-
 
 @dataclass()
 class NamedDatedClass(NamedClass):

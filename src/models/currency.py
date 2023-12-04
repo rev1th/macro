@@ -1,8 +1,6 @@
 
-from pydantic.dataclasses import dataclass
 from enum import StrEnum
 
-@dataclass(frozen=True)
 class Currency(StrEnum):
 
     USD = 'USD'

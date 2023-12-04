@@ -6,7 +6,7 @@ import datetime as dtm
 import numpy as np
 
 from models.abstract_instrument import Future
-from models.curve_instrument import CurveInstrument
+from models.rate_curve_instrument import CurveInstrument
 from lib.chrono import Tenor, DayCount, get_bdate_series
 from models.base_types import get_fixing
 from models.rate_curve import YieldCurve

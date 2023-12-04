@@ -6,7 +6,7 @@ import datetime as dtm
 from lib.chrono import Tenor
 from models.abstract_instrument import BaseInstrument
 from models.currency import Currency
-from models.curve_instrument import CurveInstrument
+from models.rate_curve_instrument import CurveInstrument
 from models.rate_curve import YieldCurve
 
 

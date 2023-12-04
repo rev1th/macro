@@ -20,6 +20,10 @@ class BaseInstrument(NamedClass):
     def value_date(self) -> dtm.date:
         return self._value_date
 
+    @property
+    def price(self) -> float:
+        raise NotImplementedError("Property not defined: price")
+
     def set_market(self, date: dtm.date) -> None:
         self._value_date = date
 

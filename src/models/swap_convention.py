@@ -6,7 +6,6 @@ from lib.chrono import Tenor, Frequency, DayCount, BDayAdjust
 from models.currency import Currency
 
 
-@dataclass(frozen=True)
 class NotionalExchangeType(Enum):
 
     NONE = 'NONE'

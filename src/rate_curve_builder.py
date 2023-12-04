@@ -10,7 +10,7 @@ import pandas as pd
 from lib import solver
 from models.base_types import NamedClass, NamedDatedClass
 from lib.chrono import DayCount
-from models.curve_instrument import CurveInstrument
+from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
 from models.swap import DomesticSwap, BasisSwap
 from models.fx import FXSpot, FXSwapC

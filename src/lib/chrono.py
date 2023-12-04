@@ -49,7 +49,6 @@ def get_adjusted_date(adjust_type: str, date: dtm.date, calendar: str = None) ->
         case _:
             return date
 
-@dataclass(frozen=True)
 class BDayAdjustType(StrEnum):
 
     NoAdjust = ''
@@ -170,7 +169,6 @@ class Tenor():
         return schedule
 
 
-@dataclass(frozen=True)
 class Frequency(StrEnum):
 
     Annual = 'A'
@@ -214,7 +212,6 @@ class Frequency(StrEnum):
         return schedule
 
 
-@dataclass(frozen=True)
 class DayCount(StrEnum):
     
     ACT360 = 'ACT360'

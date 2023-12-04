@@ -50,10 +50,6 @@ class CurveInstrument(BaseInstrument):
     def get_pv(self) -> float:
         raise NotImplementedError("Abstract function: get_pv")
     
-    @property
-    def price(self) -> float:
-        raise NotImplementedError("Property not defined: price")
-    
     def __lt__(self, other) -> bool:
         return self.end < other.end
 

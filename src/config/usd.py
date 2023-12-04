@@ -5,7 +5,7 @@ import logging
 import lib.chrono as date_lib
 from models.base_types import FIXING_CURVE_MAP
 from models.swap_convention import SWAP_CONVENTION_MAP
-from models.curve_instrument import Deposit
+from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
 import data_api.scraper as data_scraper
