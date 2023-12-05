@@ -117,12 +117,11 @@ class YieldCurveModel(NamedClass):
         return self.get_instrument_pv(knot_ins[-1])
     
     def get_calibration_error_solver(self, values: list[float]) -> float:
-        error = 0
+        errors = []
         for ins in self.instruments:
             if ins.knot:
-                pv = self.get_instrument_pv(ins)
-                error += pv*pv
-        return error
+                errors.append(self.get_instrument_pv(ins))
+        return np.sqrt(np.mean(np.array(errors)**2))
     
     def set_convexity(self) -> None:
         for f_ins in self.instruments:
@@ -179,7 +178,7 @@ class YieldCurveSetModel(NamedDatedClass):
     def curves(self) -> list[YieldCurve]:
         return [crv_def.curve for crv_def in self.models]
     
-    def build_terative(self, iter: int = 1) -> bool:
+    def build_iterative(self, iter: int = 1) -> bool:
         nodes_in = [deepcopy(crv_def.curve.nodes) for crv_def in self.models]
         for k in self.knots:
             for crv_def in self.models:
@@ -199,13 +198,13 @@ class YieldCurveSetModel(NamedDatedClass):
                 if iter >= CURVE_SOLVER_MAX_ITERATIONS:
                     logger.error(f"Failed to fit the curve after {CURVE_SOLVER_MAX_ITERATIONS}.\n {nodes_in}")
                     return False
-                return self.build_terative(iter=iter+1)
+                return self.build_iterative(iter=iter+1)
         return True
     
     def build(self) -> bool:
         for crv_def in self.models:
             crv_def.reset(self.date)
-        return self.build_terative()
+        return self.build_iterative()
     
     def calibrate_convexity(self, last_fixed_vol_date: dtm.date = None) -> None:
         for con in self.models:

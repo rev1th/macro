@@ -25,7 +25,8 @@ if __name__ == '__main__':
 
 # python -m src.data_api.scraper --fed
 
+# python -m cProfile -o profile src\main.py
+
 # import pstats
-# from pstats import SortKey
-# p = pstats.Stats(r'C:\Users\Revanth\Downloads\profile')
-# p.strip_dirs().sort_stats(SortKey.CUMULATIVE).print_stats(25)
+# p = pstats.Stats(r'profile')
+# p.strip_dirs().sort_stats(pstats.SortKey.CUMULATIVE).print_stats(25)

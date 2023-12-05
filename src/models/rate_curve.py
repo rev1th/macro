@@ -1,10 +1,10 @@
 
 from pydantic.dataclasses import dataclass
 from dataclasses import InitVar
-from typing import ClassVar, Union, Optional
+from typing import ClassVar, Union, Optional, Iterable
 import datetime as dtm
+import bisect
 import logging
-from sortedcontainers import SortedList
 
 from lib.chrono import DayCount, get_bdate_series, date_to_int
 from lib.interpolator import Interpolator
@@ -37,7 +37,7 @@ class YieldCurve(NamedDatedClass):
     _step_cutoff_date: ClassVar[dtm.date]
     _interpolator: ClassVar[Interpolator]
     _cached_step_rate: ClassVar[dict[tuple[YieldCurveNode, YieldCurveNode], float]]
-    _bdates: ClassVar[SortedList[dtm.date]]
+    _bdates: ClassVar[Iterable[dtm.date]]
     _dcfs_n: ClassVar[dict[dtm.date, float]]
     # https://www.geeksforgeeks.org/python-get-next-key-in-dictionary/
 
@@ -51,7 +51,7 @@ class YieldCurve(NamedDatedClass):
 
         # cached attributes
         self._cached_step_rate = {}
-        self._bdates = SortedList(get_bdate_series(self.date, self._nodes[-1].date, self._calendar))
+        self._bdates = get_bdate_series(self.date, self._nodes[-1].date, self._calendar)
         self._dcfs_n = {}
         for i, d in enumerate(self._bdates[:-1]):
             self._dcfs_n[d] = self._daycount_type.get_dcf(d, self._bdates[i+1]), i
@@ -83,7 +83,7 @@ class YieldCurve(NamedDatedClass):
         try:
             return self._dcfs_n[date][0]
         except KeyError:
-            return self.get_dcf(date, self._bdates[self._bdates.bisect_left(date)])
+            return self.get_dcf(date, self._bdates[bisect.bisect_left(self._bdates, date)])
 
     def get_bdates(self, from_date: dtm.date, to_date: dtm.date) -> list[dtm.date]:
         return [self._bdates[i] for i in range(self._dcfs_n[from_date][1], self._dcfs_n[to_date][1])]
@@ -92,7 +92,7 @@ class YieldCurve(NamedDatedClass):
         try:
             return self._bdates[self._dcfs_n[date][1]+1]
         except KeyError:
-            return self._bdates[self._bdates.bisect_left(date)]
+            return self._bdates[bisect.bisect_left(self._bdates, date)]
 
     def update_node(self, date: dtm.date, value: float) -> None:
         for i, node in enumerate(self._nodes):
@@ -119,7 +119,7 @@ class YieldCurve(NamedDatedClass):
             return self._get_step_rate(date)
         else:
             if date not in self._bdates:
-                bdate = self._bdates[self._bdates.bisect_left(date)-1]
+                bdate = self._bdates[bisect.bisect_left(self._bdates, date)-1]
             else:
                 bdate = date
             return self.get_forward_rate(bdate, self.get_next_bdate(bdate))

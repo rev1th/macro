@@ -4,18 +4,17 @@ from dataclasses import InitVar
 from typing import ClassVar
 import numpy as np
 from scipy import interpolate
-from sortedcontainers import SortedList
+import bisect
 
 
 @dataclass
 class Interpolator():
     _xy_init: InitVar[list[tuple[float, float]]]
-    # _xs: list[float]
-    # _ys: list[float]
+    _xs: ClassVar[list[float]]
+    _ys: ClassVar[list[float]]
 
     def __post_init__(self, xy_init):
-        self._xs = SortedList([xyi[0] for xyi in xy_init])
-        self._ys = [xyi[1] for xyi in xy_init]
+        self._xs, self._ys = zip(*xy_init)
 
     @property
     def size(self):
@@ -58,7 +57,7 @@ class Step(Interpolator):
 
         if x in self._xs:
             return self._ys[self._xs.index(x)]
-        ih = self._xs.bisect_left(x)
+        ih = bisect.bisect_left(self._xs, x)
         return self._ys[ih-1]
 
 
@@ -78,7 +77,7 @@ class LogLinear(Interpolator):
         elif x > self._xs[-1]:
             slope = (self.log_ys[-1] - self.log_ys[-2]) / (self._xs[-1] - self._xs[-2])
             return self._ys[-1] * np.exp((x-self._xs[-1]) * slope)
-        ih = self._xs.bisect_left(x)
+        ih = bisect.bisect_left(self._xs, x)
         slope = (self.log_ys[ih] - self.log_ys[ih-1]) / (self._xs[ih] - self._xs[ih-1])
         return self._ys[ih-1] * np.exp((x - self._xs[ih-1]) * slope)
 
@@ -138,7 +137,7 @@ class MonotoneConvex(Interpolator):
         elif x > self._xs[-1]:
             f_x = -np.log(self._ys[-1] / self.get_value(self._xs[-1]-1))
             return self._ys[-1] * np.exp(-f_x * (x-self._xs[-1]))
-        ih = self._xs.bisect_left(x)
+        ih = bisect.bisect_left(self._xs, x)
         dx = (x-self._xs[ih-1]) / (self._xs[ih]-self._xs[ih-1])
         gi = self.fs[ih] - self.fds[ih]
         gi_1 = self.fs[ih-1] - self.fds[ih]
