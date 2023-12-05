@@ -2,6 +2,7 @@
 from typing import Union
 from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
+from abc import abstractmethod
 import datetime as dtm
 
 from models.abstract_instrument import BaseInstrument
@@ -47,8 +48,9 @@ class CurveInstrument(BaseInstrument):
     def knot(self, value: dtm.date):
         self._knot = value
     
+    @abstractmethod
     def get_pv(self) -> float:
-        raise NotImplementedError("Abstract function: get_pv")
+        """Get PV of rate curve instrument."""
     
     def __lt__(self, other) -> bool:
         return self.end < other.end

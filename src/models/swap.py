@@ -2,6 +2,7 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 from typing import ClassVar
+from abc import abstractmethod
 import datetime as dtm
 
 from lib.chrono import Tenor
@@ -54,8 +55,9 @@ class SwapLeg():
             adjust_type=self._convention.coupon_adjust_type)
         self.coupon_pay_dates = [self._convention.coupon_pay_delay.get_date(rd) for rd in self.coupon_dates]
     
+    @abstractmethod
     def get_pv(self) -> float:
-        raise NotImplementedError("Abstract function: get_pv for swap leg")
+        """Get PV for Swap Leg"""
 
     def get_pv01(self, discount_curve: YieldCurve) -> float:
         pv01 = 0
@@ -170,8 +172,9 @@ class SwapCommon(BaseInstrument):
         self._knot = self.end_date
         assert date <= self.knot, "Valuation date cannot be after expiry"
     
+    @abstractmethod
     def get_par(self, _: YieldCurve) -> float:
-        raise NotImplementedError("Abstract function: get_par for swap")
+        """Get Par rate for Swap"""
 
 @dataclass
 class SwapCommonC(SwapCommon, CurveInstrument):

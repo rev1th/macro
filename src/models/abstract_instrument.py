@@ -1,6 +1,7 @@
 
 from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
+from abc import abstractmethod
 import datetime as dtm
 
 from models.base_types import NamedClass
@@ -21,8 +22,9 @@ class BaseInstrument(NamedClass):
         return self._value_date
 
     @property
+    @abstractmethod
     def price(self) -> float:
-        raise NotImplementedError("Property not defined: price")
+        """Gives Price of instrument"""
 
     def set_market(self, date: dtm.date) -> None:
         self._value_date = date
