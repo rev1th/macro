@@ -8,7 +8,7 @@ from models.swap_convention import SWAP_CONVENTION_MAP
 from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
-import data_api.scraper as data_scraper
+import data_api.cme as data_cme
 from rate_curve_builder import YieldCurveModel, YieldCurveSetModel
 from models.vol_curve import VolCurve
 
@@ -16,7 +16,7 @@ logger = logging.Logger(__name__)
 
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
-    futures_prices = data_scraper.load_cme_prices(contract_type)
+    futures_prices = data_cme.load_prices(contract_type)
     assert futures_prices[0] == val_date, "Valuation date and market data mismatch"
     fut_instruments_crv = []
     for ins in fut_instruments:
@@ -32,7 +32,7 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     return fut_instruments_crv
 
 def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.date = None) -> list[DomesticSwap]:
-    swap_prices = data_scraper.load_cme_swap_data(fixing_type)
+    swap_prices = data_cme.load_swap_data(fixing_type)
     assert val_date in swap_prices, f"Swap prices missing for {val_date}"
     if fixing_type == 'FF':
         swap_index = 'USDFFSOFR'

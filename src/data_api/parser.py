@@ -2,18 +2,17 @@
 import pandas as pd
 from sortedcontainers import SortedDict
 
-from . import core as data_core
-from .scraper import CME_DATE_FORMAT
+from .cme import CME_DATE_FORMAT
+from common import io
 from models.base_types import FixingCurve
 from models.rate_future import RateFutureIMM, RateFutureSerial
 from models.swap_convention import SwapLegConvention
 
-DATA_FOLDER = data_core.DATA_FOLDER
 DATE_FORMAT = CME_DATE_FORMAT
 
 
 def read_fixings(filename: str, date_col: str, rate_col: str) -> FixingCurve:
-    df = pd.read_csv(data_core.data_path(filename))
+    df = pd.read_csv(io.get_path(filename))
     df = df[df[date_col].notnull()]
     df[date_col] = pd.to_datetime(df[date_col], format = DATE_FORMAT).apply(lambda tms: tms.date())
     date_rates = df[[date_col, rate_col]].set_index(date_col).T.to_dict('list')
@@ -28,7 +27,7 @@ def read_IMM_futures(filename: str,
                      name_col: str,
                      expiry_col: str,
                      settle_col: str) -> list[RateFutureIMM]:
-    df = pd.read_csv(data_core.data_path(filename), dtype=str)
+    df = pd.read_csv(io.get_path(filename), dtype=str)
     for col in [expiry_col, settle_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
     df_imm = df[df[expiry_col].apply(lambda d: d.month % 3==0)]
@@ -50,7 +49,7 @@ def read_serial_futures(filename: str,
                         name_col: str,
                         expiry_col: str,
                         settle_col: str) -> list[RateFutureSerial]:
-    df = pd.read_csv(data_core.data_path(filename), dtype=str)
+    df = pd.read_csv(io.get_path(filename), dtype=str)
     for col in [expiry_col, settle_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
     expiries = [RateFutureSerial(
@@ -62,13 +61,13 @@ def read_serial_futures(filename: str,
 
 def read_meeting_dates(filename: str = 'meetingdates.csv', bank_col: str='Central Bank', date_col: str='Date',
                        filter: str = 'FED') -> list[pd.Timestamp]:
-    df = pd.read_csv(data_core.data_path(filename), dtype=str)
+    df = pd.read_csv(io.get_path(filename), dtype=str)
     df[date_col] = pd.to_datetime(df[date_col], format = DATE_FORMAT).apply(lambda tms: tms.date())
     return df[df[bank_col]==filter][date_col].to_list()
 
 
 def read_swap_conventions(filename: str = 'swap_convention.csv') -> dict[tuple[str, int], SwapLegConvention]:
-    df = pd.read_csv(data_core.data_path(filename), dtype=str, index_col=['Name', 'LegId'])
+    df = pd.read_csv(io.get_path(filename), dtype=str, index_col=['Name', 'LegId'])
     res = {}
     for id in df.index:
         df_row = df.loc[id]
