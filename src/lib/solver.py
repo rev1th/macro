@@ -31,5 +31,5 @@ def find_root(error_f, args: tuple[any], bracket: tuple[float] = None, init_gues
                 return bracket[1]
             raise Exception(f"Solver failed with {e}")
     if not solver.converged:
-        raise Exception(f"Failed to converge after {solver.iterations} due to {solver.flag}")
+        raise Exception(f"Failed to converge after {solver.iterations} iterations due to {solver.flag}")
     return solver.root

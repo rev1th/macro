@@ -27,7 +27,7 @@ def load_fed_data(code: str, start: dtm.date = dtm.date(2023, 1, 1), save: bool 
     content = request.url_get(NYFED_URL, params=params)
 
     if save:
-        filename = io.path(code, format='csv')
+        filename = io.get_path(code, format='csv')
         # os.rename(filename, filename + '.bkp')
         with open(filename, 'w') as f:
             f.write(content)

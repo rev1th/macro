@@ -2,7 +2,7 @@
 from pydantic.dataclasses import dataclass
 from enum import Enum
 
-from lib.chrono import Tenor, Frequency, DayCount, BDayAdjust
+from common.chrono import Tenor, Frequency, DayCount, BDayAdjust
 from models.currency import Currency
 
 

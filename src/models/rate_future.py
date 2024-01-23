@@ -7,7 +7,7 @@ import numpy as np
 
 from models.abstract_instrument import Future
 from models.rate_curve_instrument import CurveInstrument
-from lib.chrono import Tenor, DayCount, get_bdate_series
+from common.chrono import Tenor, DayCount, get_bdate_series
 from models.base_types import get_fixing
 from models.rate_curve import YieldCurve
 from models.vol_curve import VolCurve

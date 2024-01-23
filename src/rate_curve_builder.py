@@ -9,7 +9,7 @@ import pandas as pd
 
 from lib import solver
 from models.base_types import NamedClass, NamedDatedClass
-from lib.chrono import DayCount
+from common.chrono import DayCount
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
 from models.swap import DomesticSwap, BasisSwap
@@ -19,7 +19,7 @@ from models.vol_curve import VolCurve
 
 CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
-DF_UPPER_LIMIT = 1e2
+DF_UPPER_LIMIT = 1e1
 DF_LOWER_LIMIT = 1e-4
 CVXADJ_RATE_TOLERANCE = 0.3e-4
 
@@ -218,11 +218,13 @@ class YieldCurveSetModel(NamedDatedClass):
         fwd_rates = {}
         node_zrates = {}
         for yc in self.curves:
-            fwd_rates[yc.name] = {}
-            node_zrates[yc.name] = {}
+            fwd_rates_i = {}
+            node_zrates_i = {}
             for d in yc._bdates[:-1]:
-                fwd_rates[yc.name][d] = yc.get_rate(d)
+                fwd_rates_i[d] = yc.get_rate(d)
             for nd in yc._nodes:
-                node_zrates[yc.name][nd.date] = yc.get_zero_rate(nd.date)
+                node_zrates_i[nd.date] = yc.get_zero_rate(nd.date)
+            fwd_rates[yc.name] = pd.Series(fwd_rates_i)
+            node_zrates[yc.name] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates
 

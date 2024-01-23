@@ -1,45 +1,28 @@
-# import pandas as pd
+import pandas as pd
 # import plotly.express as px
-import plotly.graph_objects as go
+from common import plotter
 
-def get_curve_figure(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]):
+RATE_FORMAT = ',.3%'
+RATE_NAME_1 = 'Forward Rate (%)'
+RATE_NAME_2 = 'Zero Rate (%)'
+DATE_FORMAT = '%d-%b-%y'
+
+def get_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_nodes: dict[str, dict[any, float]]):
+    fig = plotter.get_figure(fwd_curves, zero_curves_nodes, title='Yield Curve',
+                             x_name='Date', x_format=DATE_FORMAT,
+                             y_name=RATE_NAME_1, y_format=RATE_FORMAT,
+                             y2_name=RATE_NAME_2, y2_format=RATE_FORMAT)
+    fwd_curves_nodes = {}
+    for k, vc in zero_curves_nodes.items():
+        fwd_points_i = {}
+        for dt in vc.index:
+            if dt in fwd_curves[k]:
+                fwd_points_i[dt] = fwd_curves[k][dt]
+        fwd_curves_nodes[k] = pd.Series(fwd_points_i)
+    plotter.add_traces(fig, fwd_curves_nodes, group=RATE_NAME_1, mode='markers', showlegend=False)
+    return fig
     # data_df = pd.DataFrame(fwd_curve.items(), columns=[date_col] + point_cols).set_index([date_col])
     # fig = px.line(data_df, title='Fwd Rates')
-    fig = go.Figure()
-    for k, fc in fwd_curves.items():
-        fig.add_trace(go.Scatter(
-            x=list(fc.keys()),
-            y=list(fc.values()),
-            name=f'{k} - Forward Rates',
-            legendgroup='G1',
-            ))
-        fig.add_trace(go.Scatter(
-            x=list(node_points[k].keys()),
-            y=[fc[p] for p in node_points[k] if p in fc],
-            name=f'{k} - Forward Rate Node',
-            mode='markers',
-            legendgroup='G1',
-            showlegend=False
-            ))
-        fig.add_trace(go.Scatter(
-            x=list(node_points[k].keys()),
-            y=list(node_points[k].values()),
-            name=f'{k} - Zero Rates',
-            mode='lines',
-            legendgroup='G1',
-            hoverinfo='skip',
-            ))
-    fig.update_layout(
-        title_text='Yield Curve',
-        xaxis=dict(
-            tickformat='%d-%b-%y'
-        ),
-        yaxis=dict(
-            title='Rate %',
-            tickformat=',.3%'
-        ),
-    )
-    return fig
 
 def display_curves(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]) -> None:
     get_curve_figure(fwd_curves, node_points).show()

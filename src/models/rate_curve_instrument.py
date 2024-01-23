@@ -7,7 +7,7 @@ import datetime as dtm
 
 from models.abstract_instrument import BaseInstrument
 from models.rate_curve import YieldCurve
-from lib.chrono import Tenor
+from common.chrono import Tenor
 
 
 # BaseModel doesn't initialize private attributes

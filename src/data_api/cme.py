@@ -18,6 +18,10 @@ MONTHMAP = dict(zip(MONTH_NAMES, MONTHCODES))
 
 CME_DATE_FORMAT = "%m/%d/%Y"
 CME_ENCODE_FORMAT = 'utf-8'
+CME_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+    'Accept-Language': 'en',
+}
 
 def month_code(month: str) -> str:
     return MONTHMAP[month]
@@ -83,14 +87,14 @@ CME_FUTPROD_MAP = {
     'FF': 305,
 }
 CME_FUTPROD_COLUMNS = ['productCode', 'contractMonth', 'firstTrade', 'lastTrade', 'settlement']
-def load_futs(code: str):
+def load_futures(code: str):
     fut_url = CME_FUTPROD_URL.format(code=CME_FUTPROD_MAP[code])
-    content_json = request.get_json(request.url_get(fut_url))
+    content_json = request.get_json(request.url_get(fut_url, headers=CME_HEADERS))
     content_df = pd.DataFrame(content_json)[CME_FUTPROD_COLUMNS]
     content_df.set_index(CME_FUTPROD_COLUMNS[0], inplace=True)
     for col in CME_FUTPROD_COLUMNS[-3:]:
         content_df[col] = pd.to_datetime(content_df[col], format='%d %b %Y')
-    filename = io.path(code, format='csv')
+    filename = io.get_path(code, format='csv')
     content_df.to_csv(filename, date_format=CME_DATE_FORMAT)
     logger.info(f"Saved {filename}")
     
@@ -103,7 +107,7 @@ CME_SWAP_MAP = {
     'FF': "sofrFedFundRates",
 }
 def load_swap_data(fixing_type: str = 'SOFR') -> dict[dtm.date, dict[str, float]]:
-    content_json = request.get_json(request.url_get(CME_SWAP_URL))
+    content_json = request.get_json(request.url_get(CME_SWAP_URL, headers=CME_HEADERS))
     curves = content_json["resultsCurve"]
     res = {}
     for curve_i in curves:
@@ -114,12 +118,11 @@ def load_swap_data(fixing_type: str = 'SOFR') -> dict[dtm.date, dict[str, float]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CME data scraper')
-    parser.add_argument('--cme', action='store_true')
     parser.add_argument('--futures', default='SR1')
     args = parser.parse_args()
     print(args)
-    if args.cme:
-        load_futs(args.futures)
+    for fut in args.futures.split(','):
+        load_futures(fut)
     # load_swap_data()
     # op = load_prices()
     # for key, val in op.items():

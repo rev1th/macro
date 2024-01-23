@@ -23,7 +23,8 @@ if __name__ == '__main__':
     for ycs in evaluate():
         plotter.display_curves(*ycs.get_graph_info())
 
-# python -m src.data_api.scraper --fed
+# python -m src.data_api.nyfed
+# python -m src.data_api.cme
 
 # python -m cProfile -o profile src\main.py
 

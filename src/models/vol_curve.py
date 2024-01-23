@@ -5,7 +5,7 @@ from typing import ClassVar
 import datetime as dtm
 import logging
 
-from lib.chrono import date_to_int
+from common.chrono import date_to_int
 from lib.interpolator import Interpolator
 from models.base_types import DataPoint, NamedDatedClass
 
