@@ -29,7 +29,7 @@ class YieldCurveNode(DataPoint):
 class YieldCurve(NamedDatedClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
     step_cutoff: InitVar[Optional[Union[dtm.date, int]]] = None
-    interpolation_methods: InitVar[list[tuple[Union[dtm.date, int], str]]] = [(0, 'Default')]
+    interpolation_methods: InitVar[list[tuple[Union[dtm.date, int], str]]] = [(None, 'Default')]
 
     _daycount_type: DayCount = DayCount.ACT360
     _calendar: str = ''
@@ -47,12 +47,13 @@ class YieldCurve(NamedDatedClass):
         assert nodes_init[0][0] > self.date, f"First node {nodes_init[0][0]} should be after valuation date {self.date}"
         self._nodes = [YieldCurveNode(nd[0], nd[1]) for nd in nodes_init]
         self._set_step_cutoff_date(step_cutoff)
-        self._interpolation_dates = []
+        self._interpolation_dates = [self.date]
         self._interpolator_classes = []
         for cto, im in interpolation_methods:
-            self._interpolation_dates.append(self._get_cutoff_date(cto))
+            if cto:
+                self._interpolation_dates.append(self._get_cutoff_date(cto))
             self._interpolator_classes.append(Interpolator.fromString(im))
-        self._interpolation_dates.append(None)
+        self._interpolation_dates.append(dtm.date.max)
         self._set_interpolators()
 
         # cached attributes
@@ -81,7 +82,7 @@ class YieldCurve(NamedDatedClass):
         for id, ic in enumerate(self._interpolator_classes):
             cto_d = self._interpolation_dates[id]
             cto_d_next = self._interpolation_dates[id+1]
-            knots = [(self.get_dcf_d(nd.date), nd.value) for nd in self.nodes if cto_d <= nd.date and (not cto_d_next or nd.date <= cto_d_next)]
+            knots = [(self.get_dcf_d(nd.date), nd.value) for nd in self.nodes if cto_d <= nd.date and nd.date <= cto_d_next]
             self._interpolators.append((cto_d_next, ic(knots)))
     
     @property

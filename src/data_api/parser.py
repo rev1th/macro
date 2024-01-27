@@ -2,13 +2,11 @@
 import pandas as pd
 from sortedcontainers import SortedDict
 
-from .cme import CME_DATE_FORMAT
+from .cme import DATE_FORMAT
 from common import io
 from models.base_types import FixingCurve
 from models.rate_future import RateFutureIMM, RateFutureSerial
 from models.swap_convention import SwapLegConvention
-
-DATE_FORMAT = CME_DATE_FORMAT
 
 
 def read_fixings(filename: str, date_col: str, rate_col: str) -> FixingCurve:

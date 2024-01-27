@@ -16,16 +16,24 @@ logger = logging.Logger(__name__)
 
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
-    futures_prices = data_cme.load_prices(contract_type)
-    assert futures_prices[0] == val_date, "Valuation date and market data mismatch"
     fut_instruments_crv = []
+    # futures_prices = data_cme.load_prices_ftp(contract_type)
+    # assert futures_prices[0] == val_date, "Valuation date and market data mismatch"
+    # for ins in fut_instruments:
+    #     f_code = ins.name[:-3]
+    #     m_code = ins.name[-3:]
+    #     if f_code in futures_prices[1] and m_code in futures_prices[1][f_code]:
+    #         price = futures_prices[1][f_code][m_code]
+    futures_prices = {}
+    for code in ['SR1', 'SR3', 'FF']:
+        fut_settle_data = data_cme.load_fut_settle_prices(code)
+        assert fut_settle_data[0] == val_date, "Valuation date and market data mismatch"
+        futures_prices.update(fut_settle_data[1])
     for ins in fut_instruments:
-        f_code = ins.name[:-3]
-        m_code = ins.name[-3:]
-        if f_code in futures_prices[1] and m_code in futures_prices[1][f_code]:
-            logger.info(f"Setting price for future {ins.name} to {futures_prices[1][f_code][m_code]}")
-            ins.set_market(val_date, futures_prices[1][f_code][m_code])
-            # ins.set_convexity(vol=RATE_VOL)
+        if ins.name in futures_prices:
+            price = futures_prices[ins.name]
+            logger.info(f"Setting price for future {ins.name} to {price}")
+            ins.set_market(val_date, price)
             fut_instruments_crv.append(ins)
         else:
             logger.warning(f"No price found for future {ins.name}. Skipping")
@@ -64,7 +72,7 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
     for ins in fut_instruments:
         if ins.expiry > step_dates[mdt_i]:
             mdt_i += 1
-            if mdt_i >= len(step_dates)-1:
+            if mdt_i >= len(step_dates):
                 logger.info('Step dates end.')
                 break
             if ins.expiry > step_dates[mdt_i]:
