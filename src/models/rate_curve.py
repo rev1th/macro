@@ -1,7 +1,7 @@
 
 from pydantic.dataclasses import dataclass
 from dataclasses import InitVar
-from typing import ClassVar, Union, Optional, Iterable
+from typing import ClassVar, Union, Optional
 import datetime as dtm
 import bisect
 import logging
@@ -9,7 +9,6 @@ import numpy as np
 
 from common.chrono import DayCount, get_bdate_series
 from lib.interpolator import Interpolator
-from lib import solver
 from models.base_types import DataPoint, NamedDatedClass, get_fixing
 
 logger = logging.Logger(__name__)
@@ -28,45 +27,35 @@ class YieldCurveNode(DataPoint):
 @dataclass
 class YieldCurve(NamedDatedClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
-    step_cutoff: InitVar[Optional[Union[dtm.date, int]]] = None
-    interpolation_methods: InitVar[list[tuple[Union[dtm.date, int], str]]] = [(None, 'Default')]
+    interpolation_methods: InitVar[list[tuple[Optional[Union[dtm.date, int]], str]]] = [(None, 'Default')]
 
     _daycount_type: DayCount = DayCount.ACT360
     _calendar: str = ''
 
     _nodes: ClassVar[list[YieldCurveNode]]
-    _step_cutoff_date: ClassVar[dtm.date]
     _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]
-    _cached_step_rate: ClassVar[dict[tuple[YieldCurveNode, YieldCurveNode], float]]
-    _bdates: ClassVar[Iterable[dtm.date]]
-    _cached_dcfs: ClassVar[dict[dtm.date, float]]
-    # https://www.geeksforgeeks.org/python-get-next-key-in-dictionary/
 
-    def __post_init__(self, nodes_init, step_cutoff, interpolation_methods: list[str]):
+    def __post_init__(self, nodes_init, interpolation_methods: list[str]):
         assert len(nodes_init) > 0, "Cannot build rate curve without nodes"
         assert nodes_init[0][0] > self.date, f"First node {nodes_init[0][0]} should be after valuation date {self.date}"
         self._nodes = [YieldCurveNode(nd[0], nd[1]) for nd in nodes_init]
-        self._set_step_cutoff_date(step_cutoff)
         self._interpolation_dates = [self.date]
         self._interpolator_classes = []
         for cto, im in interpolation_methods:
             if cto:
                 self._interpolation_dates.append(self._get_cutoff_date(cto))
-            self._interpolator_classes.append(Interpolator.fromString(im))
-        self._interpolation_dates.append(dtm.date.max)
+            else:
+                self._interpolation_dates.append(dtm.date.max)
+            args = []
+            if im == 'FlatRate':
+                bdates = get_bdate_series(self._interpolation_dates[-2], self._interpolation_dates[-1], self._calendar)
+                cached_dcfs = [self.get_dcf_d(d) for d in bdates]
+                args.append(cached_dcfs)
+            interp_cls = Interpolator.fromString(im)
+            self._interpolator_classes.append((interp_cls, *args))
+        self._interpolators = [None] * len(self._interpolator_classes)
         self._set_interpolators()
 
-        # cached attributes
-        self._cached_step_rate = {}
-        self._bdates = get_bdate_series(self.date, self._nodes[-1].date, self._calendar)
-        self._cached_dcfs = {}
-        for i, d in enumerate(self._bdates[:-1]):
-            self._cached_dcfs[d] = self._daycount_type.get_dcf(d, self._bdates[i+1]), i
-        self._cached_dcfs[self._bdates[-1]] = None, i+1
-    
-    def _set_step_cutoff_date(self, step_cutoff: Union[int, dtm.date]) -> dtm.date:
-        self._step_cutoff_date = self._get_cutoff_date(step_cutoff)
-    
     def _get_cutoff_date(self, cutoff: Union[int, dtm.date]) -> dtm.date:
         if not cutoff:
             return self.date
@@ -77,21 +66,19 @@ class YieldCurve(NamedDatedClass):
             assert isinstance(cutoff, dtm.date), f"{cutoff} should be in date format"
             return cutoff
     
-    def _set_interpolators(self) -> None:
-        self._interpolators = []
+    def _set_interpolators(self, reset: bool = True) -> None:
         for id, ic in enumerate(self._interpolator_classes):
             cto_d = self._interpolation_dates[id]
             cto_d_next = self._interpolation_dates[id+1]
             knots = [(self.get_dcf_d(nd.date), nd.value) for nd in self.nodes if cto_d <= nd.date and nd.date <= cto_d_next]
-            self._interpolators.append((cto_d_next, ic(knots)))
+            if reset or not hasattr(self._interpolators[id][1], 'update'):
+                self._interpolators[id] = (cto_d_next, ic[0](knots, *ic[1:]))
+            else:
+                self._interpolators[id][1].update(knots)
     
     @property
     def nodes(self) -> list[YieldCurveNode]:
         return [YieldCurveNode(self.date, 1)] + self._nodes
-    
-    @property
-    def step_cutoff_date(self) -> dtm.date:
-        return self._step_cutoff_date
 
     def get_dcf_cached(self, date: dtm.date) -> float:
         try:
@@ -112,7 +99,7 @@ class YieldCurve(NamedDatedClass):
         for i, node in enumerate(self._nodes):
             if node.date == date:
                 self._nodes[i] = YieldCurveNode(date, value)
-                self._set_interpolators()
+                self._set_interpolators(reset=False)
                 return
         raise Exception(f"Invalid date {date} to set node")
 
@@ -126,80 +113,11 @@ class YieldCurve(NamedDatedClass):
         assert date >= self.date, f"Cannot discount before valuation date {self.date}"
         if date == self.date:
             return 1
-        elif date <= self.step_cutoff_date:
-            return self._get_step_rate(date, give_df=True)
         
         for ctd, interpolator in self._interpolators:
             if not ctd or date < ctd:
                 return interpolator.get_value(self.get_dcf_d(date))
         raise Exception("Unreachable code")
-
-    def get_rate(self, date: dtm.date) -> float:
-        if date < self.step_cutoff_date:
-            return self._get_step_rate(date)
-        else:
-            if date not in self._bdates:
-                bdate = self._bdates[bisect.bisect_left(self._bdates, date)-1]
-            else:
-                bdate = date
-            return self.get_forward_rate(bdate, self.get_next_bdate(bdate))
-    
-    def get_step_df(self, period_rate: float, from_date: dtm.date, to_date: dtm.date) -> float:
-        df = 1
-        for d in self.get_bdates(from_date, to_date):
-            df /= (1 + period_rate * self.get_dcf_cached(d))
-        return df
-    
-    def _step_df_prime(self, period_rate: float, from_date: dtm.date, to_date: dtm.date, _: float) -> float:
-        df = 1
-        df_mult = 0
-        for d in self.get_bdates(from_date, to_date):
-            dcf_i = self.get_dcf_cached(d)
-            df_i = 1 / (1 + period_rate * dcf_i)
-            df_mult -= df_i * dcf_i
-            df *= df_i
-        return df_mult * df
-    
-    def _step_df_error(self,
-                       period_rate: float,
-                       from_date: dtm.date,
-                       to_date: dtm.date,
-                       period_df: float) -> float:
-        return self.get_step_df(period_rate, from_date, to_date) - period_df
-    
-    def _get_step_rate_period(self, df_period: float, from_date: dtm.date, to_date: dtm.date) -> float:
-        dcf_period = self.get_dcf(from_date, to_date)
-        dc_period = (to_date - from_date).days
-        l_limit = (pow(df_period, -1 / dc_period) - 1) * dc_period / dcf_period
-        # u_limit = (1 / df_period - 1) / dcf_period
-        return solver.find_root(
-                self._step_df_error,
-                args=(from_date, to_date, df_period),
-                # bracket=[l_limit, u_limit],
-                init_guess=l_limit, f_prime=self._step_df_prime,
-            )
-    
-    def _get_step_rate(self, date: dtm.date, give_df: bool = False) -> float:
-        assert date >= self.date, f"Cannot determine step rate for {date} < {self.date}"
-
-        step_nodes = [nd for nd in self.nodes if nd.date <= self.step_cutoff_date]
-        for i in range(1, len(step_nodes)):
-            if date == step_nodes[i].date and give_df:
-                return step_nodes[i].discountfactor
-            if date < step_nodes[i].date:
-                if (step_nodes[i-1], step_nodes[i]) in self._cached_step_rate:
-                    step_rate = self._cached_step_rate[(step_nodes[i-1], step_nodes[i])]
-                else:
-                    df_period = step_nodes[i].discountfactor / step_nodes[i-1].discountfactor
-                    step_rate = self._get_step_rate_period(df_period,
-                                                           from_date=step_nodes[i-1].date,
-                                                           to_date=step_nodes[i].date)
-                    self._cached_step_rate[(step_nodes[i-1], step_nodes[i])] = step_rate
-                if give_df:
-                    return step_nodes[i-1].discountfactor * self.get_step_df(
-                            step_rate, step_nodes[i-1].date, date)
-                return step_rate
-        raise Exception("Out of node bounds for step rate")
 
     def get_forward_rate(self, from_date: dtm.date, to_date: dtm.date) -> float:
         # assert from_date >= self.date, f"Forward start date {from_date} cannot be before valuation date {self.date}"
@@ -224,13 +142,12 @@ class YieldCurve(NamedDatedClass):
                 return (amount - 1) / self.get_dcf(from_date, to_date)
         else:
             return self.get_forward_rate(from_date, to_date)
-        
+    
     def get_zero_rate(self, date: dtm.date) -> float:
         assert date > self.date, f"{date} should be after valuation date {self.date}"
         try:
             df = self.get_df(date)
             return -np.log(df) / self.get_dcf_d(date)
-            # return self._get_step_rate_period(df, self.date, date)
         except Exception as e:
             logger.critical(f"Failed to find zero rate for {date} {e}")
             return None

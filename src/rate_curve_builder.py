@@ -9,7 +9,7 @@ import pandas as pd
 
 from lib import solver
 from models.base_types import NamedClass, NamedDatedClass
-from common.chrono import DayCount
+from common.chrono import DayCount, get_bdate_series
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
 from models.swap import DomesticSwap, BasisSwap
@@ -75,8 +75,8 @@ class YieldCurveModel(NamedClass):
         if date:
             kwargs = {}
             if self._step_cutoff:
-                kwargs['step_cutoff'] = self._step_cutoff
-            # kwargs['interpolation_method'] = 'MonotoneConvex'
+                kwargs['interpolation_methods'] = [(self._step_cutoff, 'LogLinear'), (None, 'LogCubic')]
+            # kwargs['interpolation_methods'] = [(None, 'MonotoneConvex')]
             if self._daycount_type:
                 kwargs['_daycount_type'] = self._daycount_type
             self._curve = YieldCurve(
@@ -96,6 +96,20 @@ class YieldCurveModel(NamedClass):
             [(ins.name, ins.knot, ins.price, self.get_instrument_pv(ins)) for ins in self.instruments],
             columns=['Name', 'Date', 'Price', 'Error']
             )
+    
+    def get_jacobian(self) -> list[list[float]]:
+        matrix = [[0] * len(self.knots)] * len(self.instruments)
+        pvs = []
+        bump = 1e-4
+        for i, inst in enumerate(self.instruments):
+            pvs[i] = self.get_instrument_pv(inst)
+        for j, k in enumerate(self.knots):
+            v = self.curve.get_df(k)
+            v_bump = v * np.exp(bump)
+            self.curve.update_node(k, v_bump)
+            for i, inst in enumerate(self.instruments):
+                pv_bump = self.get_instrument_pv(inst)
+                matrix[i][j] = (pv_bump - pvs[i])
     
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
         if isinstance(instrument, FXSwapC):
@@ -140,7 +154,7 @@ class YieldCurveModel(NamedClass):
                 sw_crv_diff = fut_implied_par - sw_ins.fix_rate
                 last_fixed_vol = self.vol_curve.get_vol(last_fixed_vol_date)
                 logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par}, Market Rate={sw_ins.fix_rate}')
-                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE:
+                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and last_fixed_vol > 0:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, last_fixed_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
                     var_adjusted = np.square(last_fixed_vol) + 3 * sw_crv_diff / (np.square(sw_dcf_1) + np.square(sw_dcf_2))
@@ -218,10 +232,11 @@ class YieldCurveSetModel(NamedDatedClass):
         fwd_rates = {}
         node_zrates = {}
         for yc in self.curves:
+            bdates = get_bdate_series(self.date, yc.nodes[-1].date, self._calendar)
             fwd_rates_i = {}
             node_zrates_i = {}
-            for d in yc._bdates[:-1]:
-                fwd_rates_i[d] = yc.get_rate(d)
+            for id, dt in enumerate(bdates[:-1]):
+                fwd_rates_i[id] = yc.get_forward_rate(dt, bdates[id+1])
             for nd in yc._nodes:
                 node_zrates_i[nd.date] = yc.get_zero_rate(nd.date)
             fwd_rates[yc.name] = pd.Series(fwd_rates_i)

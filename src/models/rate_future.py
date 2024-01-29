@@ -95,7 +95,10 @@ class RateFutureSerial(RateFutureC):
         for di in range(0, len(bdates)-1):
             date_i = bdates[di]
             date_i_next = bdates[di+1]
-            rate_fix = curve.get_rate(date_i) if date_i >= self.value_date else self.underlying_rate(date_i)
+            if date_i >= self.value_date:
+                rate_fix = curve.get_forward_rate(date_i, date_i_next)
+            else:
+                rate_fix = self.underlying_rate(date_i)
             
             settle_rate += rate_fix * (date_i_next - date_i).days
             date_i = date_i_next

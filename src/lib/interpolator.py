@@ -6,6 +6,7 @@ import numpy as np
 from scipy import interpolate
 import bisect
 
+from lib import solver
 
 @dataclass
 class Interpolator():
@@ -26,7 +27,7 @@ class Interpolator():
 
     @classmethod
     def fromString(cls, type: str):
-        if type in ('Default', 'LogCubicSplineNatural'):
+        if type in ('Default', 'LogCubic', 'LogCubicSplineNatural'):
             return LogCubicSplineNatural
         elif type == 'Step':
             return Step
@@ -36,6 +37,8 @@ class Interpolator():
             return LogCubicSpline
         elif type == 'MonotoneConvex':
             return MonotoneConvex
+        elif type == 'FlatRate':
+            return FlatRate
         else:
             raise Exception(f"{type} not supported yet")
 
@@ -66,6 +69,9 @@ class LogLinear(Interpolator):
     log_ys: ClassVar[list[float]] = None
 
     def __post_init__(self, xy_init):
+        self.update(xy_init)
+
+    def update(self, xy_init):
         super().__post_init__(xy_init)
         self.log_ys = [np.log(y) for y in self._ys]
     
@@ -80,6 +86,79 @@ class LogLinear(Interpolator):
         ih = bisect.bisect_left(self._xs, x)
         slope = (self.log_ys[ih] - self.log_ys[ih-1]) / (self._xs[ih] - self._xs[ih-1])
         return self._ys[ih-1] * np.exp((x - self._xs[ih-1]) * slope)
+
+
+@dataclass
+class FlatRate(Interpolator):
+    _dcfs: list[float]
+
+    _cached_step_rate: ClassVar[dict[tuple[tuple[float, float], tuple[float, float]], float]]
+
+    def __post_init__(self, xy_init):
+        self.update(xy_init)
+        # cached attributes
+        self._cached_step_rate = {}
+
+    def update(self, xy_init):
+        super().__post_init__(xy_init)
+
+    def _get_dcf(self, from_x: float, to_x: float) -> float:
+        si = bisect.bisect_left(self._dcfs, from_x)
+        ei = bisect.bisect_left(self._dcfs, to_x)
+        dcf_p = from_x
+        for xi in range(si+1, ei+1):
+            yield self._dcfs[xi] - dcf_p
+            dcf_p = self._dcfs[xi]
+        yield to_x - dcf_p
+
+    def _step_df(self, period_rate: float, from_x: float, to_x: float) -> float:
+        df = 1
+        for dcf_i in self._get_dcf(from_x, to_x):
+            df /= (1 + period_rate * dcf_i)
+        return df
+    
+    def _step_df_prime(self, period_rate: float, from_x: float, to_x: float, _: float) -> float:
+        df = 1
+        df_mult = 0
+        for dcf_i in self._get_dcf(from_x, to_x):
+            df_i = 1 / (1 + period_rate * dcf_i)
+            df_mult -= df_i * dcf_i
+            df *= df_i
+        return df_mult * df
+    
+    def _step_df_error(self,
+                       period_rate: float,
+                       from_x: float, to_x: float,
+                       period_df: float) -> float:
+        return self._step_df(period_rate, from_x, to_x) - period_df
+    
+    def _eval_period_rate(self, df_period: float, from_x: float, to_x: float) -> float:
+        dcf_period = to_x-from_x
+        l_limit = -np.log(df_period) / dcf_period
+        # u_limit = (1 / df_period - 1) / dcf_period
+        return solver.find_root(
+                self._step_df_error,
+                args=(from_x, to_x, df_period),
+                # bracket=[l_limit, u_limit],
+                init_guess=l_limit, f_prime=self._step_df_prime,
+            )
+    
+    def get_value(self, x: float) -> float:
+        super()._get_value(x)
+
+        for i in range(1, len(self._ys)):
+            if x == self._xs[i]:
+                return self._ys[i]
+            elif x < self._xs[i]:
+                step_key = ((self._xs[i-1], self._ys[i-1]), (self._xs[i], self._ys[i]))
+                if step_key in self._cached_step_rate:
+                    step_rate = self._cached_step_rate[step_key]
+                else:
+                    df_period = self._ys[i] / self._ys[i-1]
+                    step_rate = self._eval_period_rate(df_period, from_x=self._xs[i-1], to_x=self._xs[i])
+                    self._cached_step_rate[step_key] = step_rate
+                return self._ys[i-1] * self._step_df(step_rate, self._xs[i-1], x)
+        raise Exception("Out of node bounds for step rate")
 
 
 # Cubic spline with free ends
@@ -97,7 +176,7 @@ class LogCubicSpline(Interpolator):
         return np.exp(interpolate.splev(x, self.spline_tck))
 
 
-# Cubic spline with f''(x) = 0 at both ends. Standard for curve construction
+# Natural Cubic spline with f''(x) = 0 at both ends. Standard for curve construction
 @dataclass
 class LogCubicSplineNatural(Interpolator):
     log_ys: ClassVar[list[float]] = None
@@ -116,7 +195,6 @@ class LogCubicSplineNatural(Interpolator):
 
 @dataclass
 class MonotoneConvex(Interpolator):
-    log_ys: ClassVar[list[float]] = None
 
     def __post_init__(self, xy_init):
         super().__post_init__(xy_init)

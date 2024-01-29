@@ -4,6 +4,7 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 from abc import abstractmethod
 import datetime as dtm
+import numpy as np
 
 from models.abstract_instrument import BaseInstrument
 from models.rate_curve import YieldCurve
@@ -79,7 +80,8 @@ class Deposit(CurveInstrument):
 
     def get_pv(self, curve: YieldCurve) -> float:
         fcast_rate = curve.get_forward_rate(self.start_date, self.end_date)
-        fcast_rate *= curve.get_dcf(self.start_date, self.end_date)
-        fixed_rate = 1 / curve.get_step_df(self._rate, self.start_date, self.end_date) - 1
+        period_dcf = curve.get_dcf(self.start_date, self.end_date)
+        fcast_rate *= period_dcf
+        fixed_rate = np.exp(self._rate * period_dcf) - 1
         return self.notional * (fcast_rate - fixed_rate)
 
