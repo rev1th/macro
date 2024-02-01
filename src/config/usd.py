@@ -9,7 +9,7 @@ from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
 import data_api.cme as data_cme
-from rate_curve_builder import YieldCurveModel, YieldCurveSetModel
+from rate_curve_builder import YieldCurveModel, YieldCurveGroupModel
 from models.vol_curve import VolCurve
 
 logger = logging.Logger(__name__)
@@ -143,5 +143,5 @@ def construct():
                                            _rate_vol_curve=ff_rate_vol_curve,
                                            name='FF'))
     
-    return YieldCurveSetModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
+    return YieldCurveGroupModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
 

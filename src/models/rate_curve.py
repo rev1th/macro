@@ -103,6 +103,13 @@ class YieldCurve(NamedDatedClass):
                 return
         raise Exception(f"Invalid date {date} to set node")
 
+    def update_nodes(self, log_values: list[float]) -> None:
+        assert(len(self._nodes) == len(log_values), f"Inputs don't fit nodes {len(log_values)}")
+        for i, node in enumerate(self._nodes):
+            self._nodes[i] = YieldCurveNode(node.date, np.exp(log_values[i]))
+        self._set_interpolators(reset=False)
+        return
+    
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
         return self._daycount_type.get_dcf(from_date, to_date)
 

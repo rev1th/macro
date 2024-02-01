@@ -4,7 +4,7 @@ import logging
 
 import common.chrono as date_lib
 import data_api.cfets as data_cfets
-from rate_curve_builder import YieldCurveModel, YieldCurveSetModel
+from rate_curve_builder import YieldCurveModel, YieldCurveGroupModel
 from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap
 from models.currency import Currency
@@ -74,4 +74,4 @@ def construct(base_curve):
         YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7D'),
         # YieldCurveModel('3M', cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365),
     ]
-    return YieldCurveSetModel(val_date_xccy, curve_defs, _calendar='CN', name='CNY')
+    return YieldCurveGroupModel(val_date_xccy, curve_defs, _calendar='CN', name='CNY')
