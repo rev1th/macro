@@ -48,14 +48,25 @@ def load_swaps(fixing_type: str = 'FR007') -> tuple[dtm.date, dict[str, float]]:
         res[rec['tl']] = float(rec['optimalAvg'])
     return (data_date, res)
 
-CFETS_FIXINGS_URL = 'https://iftp.chinamoney.com.cn/r/cms/www/chinamoney/data/currency/frr.json'
+CFETS_FIXINGS_URL = 'https://iftp.chinamoney.com.cn/r/cms/www/chinamoney/data/'
+CFETS_FIXINGS_FR_EP = 'currency/frr.json'
+CFETS_FIXINGS_SH_EP = 'shibor/shibor.json'
 CFETS_FIXINGS_DATE_FORMAT = '%Y-%m-%d %H:%M'
-def load_fixings() -> tuple[dtm.date, dict[str, float]]:
-    content_json = request.get_json(request.url_post(CFETS_FIXINGS_URL))
+def load_fixings(fix_name: str) -> tuple[dtm.date, dict[str, float]]:
+    fix_url = CFETS_FIXINGS_URL
+    if fix_name == 'FR':
+        code_name = 'productCode'
+        value_name = 'value'
+        fix_url += CFETS_FIXINGS_FR_EP
+    elif fix_name == 'Shibor':
+        code_name = 'termCode'
+        value_name = 'shibor'
+        fix_url += CFETS_FIXINGS_SH_EP
+    content_json = request.get_json(request.url_post(fix_url))
     content_metadata = content_json["data"]
     data_date = dtm.datetime.strptime(content_metadata["showDateCN"], CFETS_FIXINGS_DATE_FORMAT).date()
     content_data = content_json["records"]
     res = {}
     for rec in content_data:
-        res[rec['productCode']] = float(rec['value'])
+        res[rec[code_name]] = float(rec[value_name])
     return (data_date, res)

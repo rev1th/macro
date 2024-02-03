@@ -67,18 +67,19 @@ class YieldCurve(NamedDatedClass):
             return cutoff
     
     def _set_interpolators(self, reset: bool = True) -> None:
+        nodes = [YieldCurveNode(self.date, 1)] + self._nodes
         for id, ic in enumerate(self._interpolator_classes):
             cto_d = self._interpolation_dates[id]
             cto_d_next = self._interpolation_dates[id+1]
-            knots = [(self.get_dcf_d(nd.date), nd.value) for nd in self.nodes if cto_d <= nd.date and nd.date <= cto_d_next]
+            knots = [(self.get_dcf_d(nd.date), nd.value) for nd in nodes if cto_d <= nd.date and nd.date <= cto_d_next]
             if reset or not hasattr(self._interpolators[id][1], 'update'):
                 self._interpolators[id] = (cto_d_next, ic[0](knots, *ic[1:]))
             else:
                 self._interpolators[id][1].update(knots)
     
     @property
-    def nodes(self) -> list[YieldCurveNode]:
-        return [YieldCurveNode(self.date, 1)] + self._nodes
+    def nodes(self):
+        return self._nodes
 
     def get_dcf_cached(self, date: dtm.date) -> float:
         try:
@@ -104,7 +105,7 @@ class YieldCurve(NamedDatedClass):
         raise Exception(f"Invalid date {date} to set node")
 
     def update_nodes(self, log_values: list[float]) -> None:
-        assert(len(self._nodes) == len(log_values), f"Inputs don't fit nodes {len(log_values)}")
+        assert len(self._nodes) == len(log_values), f"Inputs don't fit nodes {len(log_values)}"
         for i, node in enumerate(self._nodes):
             self._nodes[i] = YieldCurveNode(node.date, np.exp(log_values[i]))
         self._set_interpolators(reset=False)

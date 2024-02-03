@@ -47,7 +47,7 @@ def read_serial_futures(filename: str,
                         name_col: str,
                         expiry_col: str,
                         settle_col: str) -> list[RateFutureSerial]:
-    df = pd.read_csv(io.get_path(filename), dtype=str)
+    df = pd.read_csv(io.get_path(filename), dtype=str, comment='#')
     for col in [expiry_col, settle_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
     expiries = [RateFutureSerial(
@@ -71,9 +71,10 @@ def read_swap_conventions(filename: str = 'swap_convention.csv') -> dict[tuple[s
         df_row = df.loc[id]
         kwargs = {}
         if df_row['Type'] == 'FLOAT':
-            kwargs['_fixing_lag']=df_row['FixingLag']
+            kwargs['_fixing'] = df_row['Fixing']
+            kwargs['_fixing_lag'] = df_row['FixingLag']
             if pd.notna(df_row['ResetFrequency']):
-                kwargs['_reset_frequency']=df_row['ResetFrequency']
+                kwargs['_fixing_reset_frequency'] = df_row['ResetFrequency']
         res[id] = SwapLegConvention(
             _currency=df_row['Currency'],
             _spot_delay=df_row['SpotDelay'],

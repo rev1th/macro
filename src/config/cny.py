@@ -14,14 +14,16 @@ logger = logging.Logger(__name__)
 
 
 def get_cny_swaps_curve(fixing_type: str = 'FR007') -> list[DomesticSwap]:
-    data_date, rates = data_cfets.load_fixings()
-    deposit = Deposit(date_lib.Tenor('7D'), name=fixing_type)
-    deposit.set_market(data_date, rates[fixing_type] / 100)
-
     data_date, swap_prices = data_cfets.load_swaps(fixing_type)
     if fixing_type == 'FR007':
+        data_date, rates = data_cfets.load_fixings('FR')
+        deposit = Deposit(date_lib.Tenor('7D'), name=fixing_type)
+        deposit.set_market(data_date, rates[fixing_type] / 100)
         swap_index = 'CNY7DR'
     elif fixing_type == 'Shibor3M':
+        data_date, rates = data_cfets.load_fixings('Shibor')
+        deposit = Deposit(date_lib.Tenor('3M'), name=fixing_type)
+        deposit.set_market(data_date, rates['3M'] / 100)
         swap_index = 'CNYSHIBOR'
     swap_instruments = [deposit]
     for tenor, rate in swap_prices.items():
@@ -64,6 +66,7 @@ def get_cny_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwa
 def construct(base_curve):
     val_date_xccy, spot_instrument, fxfwd_instruments = get_cny_fx_curve()
     cny_swaps_1 = get_cny_swaps_curve(fixing_type='FR007')
+    cny_swaps_2 = get_cny_swaps_curve(fixing_type='Shibor3M')
     curve_defs = [
         YieldCurveModel(
             fxfwd_instruments,
@@ -72,6 +75,6 @@ def construct(base_curve):
             _collateral_spot=spot_instrument,
             name='OIS'),
         YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7D'),
-        # YieldCurveModel('3M', cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365),
+        YieldCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365, name='3M'),
     ]
     return YieldCurveGroupModel(val_date_xccy, curve_defs, _calendar='CN', name='CNY')

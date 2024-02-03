@@ -1,6 +1,7 @@
 
 from pydantic.dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 from common.chrono import Tenor, Frequency, DayCount, BDayAdjust
 from models.currency import Currency
@@ -38,10 +39,11 @@ class SwapLegConvention():
     _coupon_adjust_type: str
     _coupon_pay_delay: str
     # _coupon_pay_calendar: str = None
-    _reset_frequency: str = None
 
-    _fixing_lag: str = '0B'
+    _fixing: Optional[str] = None
+    _fixing_lag: Optional[str] = None
     _fixing_calendar: str = None
+    _fixing_reset_frequency: Optional[str] = None
     
     _notional_exchange_type: str = 'NONE'
     # _notional_pay_delay: str = None
@@ -72,8 +74,8 @@ class SwapLegConvention():
         return Tenor((self._coupon_pay_delay, self._spot_calendar))
     
     @property
-    def reset_frequency(self):
-        return Frequency(self._reset_frequency)
+    def fixing(self) -> str:
+        return self._fixing
     
     @property
     def fixing_calendar(self):
@@ -82,6 +84,10 @@ class SwapLegConvention():
     @property
     def fixing_lag(self):
         return Tenor((self._fixing_lag, self.fixing_calendar))
+    
+    @property
+    def fixing_reset_frequency(self):
+        return Frequency(self._fixing_reset_frequency)
     
     @property
     def notional_exchange(self):

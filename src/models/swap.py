@@ -96,6 +96,10 @@ class SwapFixLeg(SwapLeg):
 class SwapFloatLeg(SwapLeg):
     _spread: float = field(init=False)
 
+    @property
+    def fixing(self) -> str:
+        return self._convention.fixing
+
     def set_market(self, date: dtm.date, spread: float = 0) -> None:
         super().set_market(date)
         self._spread = spread
@@ -112,7 +116,7 @@ class SwapFloatLeg(SwapLeg):
         for cp_i in range(0, len(self.coupon_dates)):
             forecast_end_date = self.coupon_dates[cp_i]
             fixing_end_date = self.coupon_fix_dates[cp_i+1]
-            pv += self.notional * (forecast_curve.get_forecast_rate(fixing_start_date, fixing_end_date) + \
+            pv += self.notional * (forecast_curve.get_forecast_rate(fixing_start_date, fixing_end_date, self.fixing) + \
                                    self._spread * self._units) * \
                     self.get_dcf(forecast_start_date, forecast_end_date) * \
                     discount_curve.get_df(self.coupon_pay_dates[cp_i])
