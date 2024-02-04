@@ -122,9 +122,9 @@ def construct():
     swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff)
     curve_instruments = [deposit] + futs_crv + swaps
     curve_defs = [YieldCurveModel(curve_instruments,
-                                       _step_cutoff = mdt_sc,
-                                       _rate_vol_curve=rate_vol_curve,
-                                       name='OIS')]
+                                  _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
+                                  _rate_vol_curve=rate_vol_curve,
+                                  name='OIS')]
 
     # Fed fund
     ff_deposit = Deposit(next_btenor, name='EFFR')
@@ -139,9 +139,9 @@ def construct():
     ff_swaps = get_swaps_curve(val_dt, fixing_type='FF', cutoff=ff_fut_cutoff)
     ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
     curve_defs.append(YieldCurveModel(ff_curve_instruments,
-                                           _step_cutoff = ff_mdt_sc,
-                                           _rate_vol_curve=ff_rate_vol_curve,
-                                           name='FF'))
+                                      _interpolation_methods = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')],
+                                      _rate_vol_curve=ff_rate_vol_curve,
+                                      name='FF'))
     
     return YieldCurveGroupModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
 

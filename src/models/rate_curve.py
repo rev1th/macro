@@ -42,10 +42,7 @@ class YieldCurve(NamedDatedClass):
         self._interpolation_dates = [self.date]
         self._interpolator_classes = []
         for cto, im in interpolation_methods:
-            if cto:
-                self._interpolation_dates.append(self._get_cutoff_date(cto))
-            else:
-                self._interpolation_dates.append(dtm.date.max)
+            self._interpolation_dates.append(self._get_cutoff_date(cto))
             args = []
             if im == 'FlatRate':
                 bdates = get_bdate_series(self._interpolation_dates[-2], self._interpolation_dates[-1], self._calendar)
@@ -58,7 +55,7 @@ class YieldCurve(NamedDatedClass):
 
     def _get_cutoff_date(self, cutoff: Union[int, dtm.date]) -> dtm.date:
         if not cutoff:
-            return self.date
+            return dtm.date.max
         elif isinstance(cutoff, int):
             assert cutoff >= 0 and cutoff < len(self._nodes)
             return self._nodes[cutoff].date

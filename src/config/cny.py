@@ -44,21 +44,24 @@ def get_cny_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwa
     spot_ins.set_market(data_date, spot_data[ccy_ref][1], settle_date=spot_settle_date)
     
     fxfwd_ins = []
-    for r in cny_fx_data:
-        ins = FXSwapC(ccy_obj, _inverse=inverse, _is_ndf=True, name=f'{ccy}_{r[0]}')
-        if r[0] == 'ON':
-            tn_start_date = r[2]
-            ins.set_market(data_date, r[1], settle_date=r[2], near_date=data_date)
-            if r[2] == spot_settle_date:
+    last_settle_date = None
+    for row in cny_fx_data:
+        ins = FXSwapC(ccy_obj, _inverse=inverse, _is_ndf=True, name=f'{ccy}_{row[0]}')
+        if row[0] == 'ON':
+            ins.set_market(data_date, row[1], settle_date=row[2], near_date=data_date)
+            if row[2] == spot_settle_date:
                 ins.exclude_knot = True
-        elif r[0] == 'TN':
+        elif row[0] == 'TN':
             # tn_start_date = date_lib.Tenor(date_lib.CBDay(-1, calendar)).get_date(spot_settle_date)
-            ins.set_market(data_date, r[1], settle_date=r[2], near_date=tn_start_date)
-            if tn_start_date == spot_settle_date:
+            ins.set_market(data_date, row[1], settle_date=row[2], near_date=last_settle_date)
+            if last_settle_date == spot_settle_date:
                 ins.exclude_knot = True
         else:
-            ins.set_market(data_date, r[1], settle_date=r[2])
+            ins.set_market(data_date, row[1], settle_date=row[2])
+            if row[2] == last_settle_date:
+                ins.exclude_knot = True
         fxfwd_ins.append(ins)
+        last_settle_date = row[2]
 
     return data_date, spot_ins, fxfwd_ins
 
@@ -70,6 +73,7 @@ def construct(base_curve):
     curve_defs = [
         YieldCurveModel(
             fxfwd_instruments,
+            _interpolation_methods = [('CNY_1M', 'LogLinear'), (None, 'LogCubic')], # MonotoneConvex
             _daycount_type=date_lib.DayCount.ACT365,
             _collateral_curve=base_curve,
             _collateral_spot=spot_instrument,

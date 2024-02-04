@@ -1,6 +1,6 @@
 
 from pydantic.dataclasses import dataclass
-from typing import ClassVar, Union
+from typing import ClassVar, Union, Optional
 import datetime as dtm
 import logging
 from copy import deepcopy
@@ -31,7 +31,7 @@ logger = logging.Logger(__name__)
 class YieldCurveModel(NamedClass):
 
     _instruments: list[CurveInstrument]
-    _step_cutoff: Union[dtm.date, int] = None
+    _interpolation_methods: list[tuple[Optional[Union[dtm.date, int, str]], str]] = None
     _daycount_type: DayCount = None
     _collateral_curve: YieldCurve = None
     _collateral_spot: FXSpot = None
@@ -80,9 +80,14 @@ class YieldCurveModel(NamedClass):
         self._knots = knot_dates
         if date:
             kwargs = {}
-            if self._step_cutoff:
-                kwargs['interpolation_methods'] = [(self._step_cutoff, 'LogLinear'), (None, 'LogCubic')]
-            # kwargs['interpolation_methods'] = [(None, 'MonotoneConvex')]
+            if self._interpolation_methods:
+                for id, interp in enumerate(self._interpolation_methods):
+                    if isinstance(interp[0], str):
+                        for inst_id, inst in enumerate(self.knot_instruments()):
+                            if inst.name == interp[0]:
+                                self._interpolation_methods[id] = (inst_id, interp[1])
+                                break
+                kwargs['interpolation_methods'] = self._interpolation_methods
             if self._daycount_type:
                 kwargs['_daycount_type'] = self._daycount_type
             self._curve = YieldCurve(
