@@ -49,10 +49,10 @@ class SwapLeg():
     def set_market(self, date: dtm.date) -> None:
         self._value_date = date
         self._start_date = self._start.get_date(self._convention.spot_delay.get_date(self._value_date))
-        self._end_date = self._end.get_date(self._start_date, adjust_type=self._convention.coupon_adjust_type)
+        self._end_date = self._end.get_date(self._start_date, bd_adjust=self._convention.coupon_adjust)
         self.coupon_dates = self._convention.coupon_frequency.generate_schedule(
             self.start_date, self.end_date,
-            adjust_type=self._convention.coupon_adjust_type)
+            bd_adjust=self._convention.coupon_adjust)
         self.coupon_pay_dates = [self._convention.coupon_pay_delay.get_date(rd) for rd in self.coupon_dates]
     
     @abstractmethod

@@ -7,7 +7,7 @@ RATE_NAME_1 = 'Forward Rate (%)'
 RATE_NAME_2 = 'Zero Rate (%)'
 DATE_FORMAT = '%d-%b-%y'
 
-def get_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_nodes: dict[str, dict[any, float]]):
+def get_rate_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_nodes: dict[str, dict[any, float]]):
     fig = plotter.get_figure(fwd_curves, zero_curves_nodes, title='Yield Curve',
                              x_name='Date', x_format=DATE_FORMAT,
                              y_name=RATE_NAME_1, y_format=RATE_FORMAT,
@@ -24,5 +24,10 @@ def get_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_nodes:
     # data_df = pd.DataFrame(fwd_curve.items(), columns=[date_col] + point_cols).set_index([date_col])
     # fig = px.line(data_df, title='Fwd Rates')
 
-def display_curves(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]) -> None:
-    get_curve_figure(fwd_curves, node_points).show()
+def display_rate_curves(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]) -> None:
+    get_rate_curve_figure(fwd_curves, node_points).show()
+
+def display_bond_curves(bond_yields: dict) -> None:
+    plotter.plot_series(pd.Series(bond_yields), title='Bond Curve',
+                        x_name='Maturity', x_format='%d-%b-%y',
+                        y_name='Yield', y_format=',.4%')

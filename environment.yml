@@ -5,13 +5,4 @@ dependencies:
   - pip=23.0
   - openssl=1.1.1
   - pip:
-    - urllib3==1.26.*
-    - requests==2.31.*
-    - numpy==1.24.*
-    - scipy==1.10.*
-    - pydantic==2.1.*
-    - sortedcontainers==2.4.*
-    - holidays==0.34
-    - pandas==2.0.*
-    - plotly==5.16.*
-    - dash==2.14.*
+    - -r requirements.txt

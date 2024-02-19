@@ -25,7 +25,11 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     #     if f_code in futures_prices[1] and m_code in futures_prices[1][f_code]:
     #         price = futures_prices[1][f_code][m_code]
     futures_prices = {}
-    for code in ['SR1', 'SR3', 'FF']:
+    if contract_type == 'SOFR':
+        codes = ['SR1', 'SR3']
+    elif contract_type == 'FF':
+        codes = ['FF']
+    for code in codes:
         fut_settle_data = data_cme.load_fut_settle_prices(code)
         assert fut_settle_data[0] == val_date, "Valuation date and market data mismatch"
         futures_prices.update(fut_settle_data[1])

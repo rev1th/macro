@@ -152,6 +152,8 @@ class YieldCurve(NamedDatedClass):
         assert date > self.date, f"{date} should be after valuation date {self.date}"
         try:
             df = self.get_df(date)
+            dcf_unit = self._daycount_type.get_unit_dcf()
+            return (df ** (-dcf_unit / self.get_dcf_d(date)) - 1) / dcf_unit
             return -np.log(df) / self.get_dcf_d(date)
         except Exception as e:
             logger.critical(f"Failed to find zero rate for {date} {e}")

@@ -1,7 +1,7 @@
 
 import logging
 
-from config import usd, cny
+from config import cny_yc, usd_yc, us_bonds
 from lib import plotter
 
 logger = logging.Logger('')
@@ -9,19 +9,20 @@ logger.setLevel(logging.DEBUG)
 
 
 def evaluate():
-    ycs_con = usd.construct()
-    ycs_con.calibrate_convexity()
-    # ycs_con.build()
+    ycg_usd = usd_yc.construct()
+    ycg_usd.calibrate_convexity()
+    # ycs_usd.build()
 
-    ycs_con_xccy = cny.construct(ycs_con.curves[0])
-    ycs_con_xccy.build()
+    ycg_cny = cny_yc.construct(ycg_usd.curves[0])
+    ycg_cny.build()
 
-    return [ycs_con, ycs_con_xccy]
+    return [ycg_usd, ycg_cny]
 
 
 if __name__ == '__main__':
-    for ycs in evaluate():
-        plotter.display_curves(*ycs.get_graph_info())
+    # plotter.display_bond_curves(us_bonds.get_graph_info(us_bonds.construct()))
+    for ycg in evaluate():
+        plotter.display_rate_curves(*ycg.get_graph_info())
 
 # python -m src.data_api.nyfed
 # python -m src.data_api.cme

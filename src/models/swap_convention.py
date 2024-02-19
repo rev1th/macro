@@ -66,7 +66,7 @@ class SwapLegConvention():
         return DayCount(self._daycount_type)
     
     @property
-    def coupon_adjust_type(self):
+    def coupon_adjust(self):
         return BDayAdjust(self._coupon_adjust_type, self._spot_calendar)
     
     @property

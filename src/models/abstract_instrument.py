@@ -11,11 +11,16 @@ from models.currency import Currency
 class BaseInstrument(NamedClass):
     _: KW_ONLY
     _currency: Currency = Currency.USD
+    _calendar: str = 'US-NY'
     _value_date: dtm.date = field(init=False, default=None)
 
     @property
     def currency(self) -> Currency:
         return self._currency
+    
+    @property
+    def calendar(self) -> str:
+        return self._calendar
     
     @property
     def value_date(self) -> dtm.date:

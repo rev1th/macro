@@ -7,7 +7,7 @@ logger = logging.Logger(__name__)
 # https://stackoverflow.com/questions/63377926/quick-question-use-the-default-value-of-the-scipy-optimize-minimize-tol-paramet
 ROOT_TOLERANCE = 1e-12
 
-def find_root(error_f, args: tuple[any], bracket: tuple[float] = None, init_guess: float = None, f_prime = None) -> float:
+def find_root(error_f, args: tuple[any] = (), bracket: tuple[float] = None, init_guess: float = None, f_prime = None) -> float:
     if f_prime:
         solver = optimize.root_scalar(
                 f=error_f,

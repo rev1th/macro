@@ -25,7 +25,7 @@ def load_main(*_):
     tabvals = []
     for ycs in evaluate():
         table = ycs.get_calibration_summary()
-        fig = plotter.get_curve_figure(*ycs.get_graph_info())
+        fig = plotter.get_rate_curve_figure(*ycs.get_graph_info())
         tabvals.append(dcc.Tab([
             html.Button('Refresh Curve', id='refresh'),
             dcc.Graph(figure=fig),
