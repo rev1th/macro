@@ -27,7 +27,13 @@ def get_rate_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_n
 def display_rate_curves(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]) -> None:
     get_rate_curve_figure(fwd_curves, node_points).show()
 
-def display_bond_curves(bond_yields: dict) -> None:
-    plotter.plot_series(pd.Series(bond_yields), title='Bond Curve',
+def display_bond_curves(bond_yields: dict, bill_yields: dict = None) -> None:
+    y_name = 'Yield'
+    t_name = 'Name'
+    bond_data = pd.DataFrame.from_dict(bond_yields, orient='Index', columns=[y_name, t_name])
+    bill_data = pd.DataFrame.from_dict(bill_yields, orient='Index', columns=[y_name, t_name])
+    plotter.plot_series(bond_data, data2=bill_data, title='Bond Curve',
+                        y_col=y_name, text_col=t_name,
                         x_name='Maturity', x_format='%d-%b-%y',
-                        y_name='Yield', y_format=',.4%')
+                        y_name=y_name, y_format=',.4%',
+                        y2_name=y_name, y2_format=',.4%')
