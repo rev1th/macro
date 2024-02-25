@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from lib import solver
 from models.abstract_instrument import BaseInstrument
-from common.chrono import Tenor, DayCount, Frequency, BDayAdjust
+from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType
 
 
 BOND_PAR = 100
@@ -55,7 +55,7 @@ class BondGeneric(BaseInstrument):
     def set_market(self, date: dtm.date, price: float) -> None:
         # assert date <= self.maturity_date, "Value date cannot be after maturity date"
         super().set_market(date)
-        self.settle_date = self._settle_delay.get_date(date, BDayAdjust('F', self.calendar))
+        self.settle_date = self._settle_delay.get_date(date, BDayAdjust(BDayAdjustType.Following, self.calendar))
         self._price = price
     
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
@@ -104,7 +104,7 @@ class Bond(BondGeneric):
         super().set_market(date, price)
         self.coupon_dates = self._coupon_frequency.generate_schedule(
             self.value_date, self.maturity_date,
-            bd_adjust=BDayAdjust('P', self.calendar), extended=True)
+            bd_adjust=BDayAdjust(BDayAdjustType.Previous, self.calendar), extended=True)
     
     @property
     def coupon(self) -> float:

@@ -59,15 +59,15 @@ class SwapLeg():
     def get_pv(self) -> float:
         """Get PV for Swap Leg"""
 
-    def get_pv01(self, discount_curve: YieldCurve) -> float:
-        pv01 = 0
+    def get_annuity(self, discount_curve: YieldCurve) -> float:
+        annuity = 0
         accrual_start_date = self.start_date
         for cp_i in range(0, len(self.coupon_dates)):
             cp_d_i = self.coupon_dates[cp_i]
             cp_pd_i = self.coupon_pay_dates[cp_i]
-            pv01 += self.notional * self.get_dcf(accrual_start_date, cp_d_i) * discount_curve.get_df(cp_pd_i)
+            annuity += self.notional * self.get_dcf(accrual_start_date, cp_d_i) * discount_curve.get_df(cp_pd_i)
             accrual_start_date = cp_d_i
-        return pv01 / 10000
+        return annuity
 
 @dataclass
 class SwapFixLeg(SwapLeg):
@@ -81,13 +81,7 @@ class SwapFixLeg(SwapLeg):
         pv = 0
         if self.notional_exchange.initial:
             pv += self.notional * discount_curve.get_df(self.start_date)
-        accrual_start_date = self.start_date
-        for cp_i in range(0, len(self.coupon_dates)):
-            cp_d_i = self.coupon_dates[cp_i]
-            cp_pd_i = self.coupon_pay_dates[cp_i]
-            pv += self.notional * self._rate * self._units * \
-                self.get_dcf(accrual_start_date, cp_d_i) * discount_curve.get_df(cp_pd_i)
-            accrual_start_date = cp_d_i
+        pv += self.get_annuity(discount_curve=discount_curve) * self._rate * self._units
         if self.notional_exchange.final:
             pv += self.notional * discount_curve.get_df(self.end_date)
         return pv
@@ -180,6 +174,10 @@ class SwapCommon(BaseInstrument):
     def get_par(self, _: YieldCurve) -> float:
         """Get Par rate for Swap"""
 
+    @abstractmethod
+    def get_pv01(self, _: YieldCurve) -> float:
+        """Get PV01 for Swap"""
+
 @dataclass
 class SwapCommonC(SwapCommon, CurveInstrument):
     pass
@@ -222,7 +220,10 @@ class DomesticSwap(SwapCommonC):
     
     def get_par(self, discount_curve: YieldCurve, forecast_curve: YieldCurve = None) -> float:
         pv = self.get_pv(discount_curve=discount_curve, forecast_curve=forecast_curve)
-        return self._rate * self._units - pv / (self._fix_leg.get_pv01(discount_curve) * 10000)
+        return self._rate * self._units - pv / self._fix_leg.get_annuity(discount_curve)
+
+    def get_pv01(self, discount_curve: YieldCurve) -> float:
+        return self._fix_leg.get_annuity(discount_curve) / 10000
 
 
 # Single currency Float vs Float
@@ -276,7 +277,10 @@ class BasisSwap(SwapCommonC):
             leg1_forecast_curve=leg1_forecast_curve,
             leg2_forecast_curve=leg2_forecast_curve,
             discount_curve=discount_curve)
-        return self._spread * self._units - pv / (self.spread_leg.get_pv01(discount_curve) * 10000)
+        return self._spread * self._units - pv / self.spread_leg.get_annuity(discount_curve)
+
+    def get_pv01(self, discount_curve: YieldCurve) -> float:
+        return self.spread_leg.get_annuity(discount_curve) / 10000
 
 
 # Cross currency Fix vs Float

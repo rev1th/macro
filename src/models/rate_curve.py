@@ -45,6 +45,8 @@ class YieldCurve(NamedDatedClass):
             self._interpolation_dates.append(self._get_cutoff_date(cto))
             args = []
             if im == 'FlatRate':
+                args.append(self._daycount_type.get_unit_dcf())
+            elif im == 'FlatRateBD':
                 bdates = get_bdate_series(self._interpolation_dates[-2], self._interpolation_dates[-1], self._calendar)
                 cached_dcfs = [self.get_dcf_d(d) for d in bdates]
                 args.append(cached_dcfs)

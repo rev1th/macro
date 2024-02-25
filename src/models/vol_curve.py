@@ -5,7 +5,6 @@ from typing import ClassVar
 import datetime as dtm
 import logging
 
-from common.chrono import date_to_int
 from lib.interpolator import Interpolator
 from models.base_types import DataPoint, NamedDatedClass
 
@@ -15,7 +14,7 @@ logger = logging.Logger(__name__)
 @dataclass
 class VolCurve(NamedDatedClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
-    interpolation_method: InitVar[str] = 'Step'
+    interpolation_method: InitVar[str] = 'RootMeanSquare'
 
     _nodes: ClassVar[list[DataPoint]]
     _interpolator: ClassVar[Interpolator]
@@ -26,8 +25,11 @@ class VolCurve(NamedDatedClass):
         self._interpolator_class = Interpolator.fromString(interpolation_method)
         self._set_interpolator()
     
+    def _date_to_float(self, date: dtm.date) -> float:
+        return (date - self.date).days / 365
+
     def _set_interpolator(self) -> None:
-        knots = [(date_to_int(nd.date), nd.value) for nd in self._nodes]
+        knots = [(self._date_to_float(nd.date), nd.value) for nd in self._nodes]
         self._interpolator = self._interpolator_class(knots)
     
     def update_node(self, date: dtm.date, value: float) -> None:
@@ -43,4 +45,4 @@ class VolCurve(NamedDatedClass):
         self._set_interpolator()
     
     def get_vol(self, date: dtm.date) -> float:
-        return self._interpolator.get_value(date_to_int(date))
+        return self._interpolator.get_value(self._date_to_float(date))

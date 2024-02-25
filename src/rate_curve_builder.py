@@ -147,7 +147,11 @@ class YieldCurveModel(NamedClass):
                 if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and last_fixed_vol > 0:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, last_fixed_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
-                    var_adjusted = np.square(last_fixed_vol) + 3 * sw_crv_diff / (np.square(sw_dcf_1) + np.square(sw_dcf_2))
+                    pv01_unit = sw_ins.get_pv01(self.curve) * 10000 / sw_ins.notional
+                    var_offset = np.log(1 + sw_crv_diff * pv01_unit / self.curve.get_df(sw_ins.end_date)) *\
+                                    12 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
+                    # var_offset = sw_crv_diff * 12 * sw_dcf_2 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
+                    var_adjusted = np.square(last_fixed_vol) + var_offset
                     vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
                     logger.critical(f'Rate Vol Adjusted {sw_ins.end_date} {vol_adjusted}')
                     self.vol_curve.update_node(last_fixed_vol_date, vol_adjusted)

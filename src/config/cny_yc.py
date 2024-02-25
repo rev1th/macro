@@ -13,7 +13,7 @@ from models.fx import FXSwapC, FXSpot
 logger = logging.Logger(__name__)
 
 
-def get_cny_swaps_curve(fixing_type: str = 'FR007') -> list[DomesticSwap]:
+def get_cny_swaps_curve(val_date: dtm.date, fixing_type: str = 'FR007') -> list[DomesticSwap]:
     data_date, swap_prices = data_cfets.load_swaps(fixing_type)
     if fixing_type == 'FR007':
         data_date, rates = data_cfets.load_fixings('FR')
@@ -25,6 +25,7 @@ def get_cny_swaps_curve(fixing_type: str = 'FR007') -> list[DomesticSwap]:
         deposit = Deposit(date_lib.Tenor('3M'), name=fixing_type)
         deposit.set_market(data_date, rates['3M'] / 100)
         swap_index = 'CNYSHIBOR'
+    assert val_date == data_date, "Valuation date and market data mismatch"
     swap_instruments = [deposit]
     for tenor, rate in swap_prices.items():
         ins = DomesticSwap(_index=swap_index, _end=date_lib.Tenor(tenor), name=f'{swap_index}_{tenor}')
@@ -67,9 +68,9 @@ def get_cny_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwa
 
 
 def construct(base_curve):
-    val_date_xccy, spot_instrument, fxfwd_instruments = get_cny_fx_curve()
-    cny_swaps_1 = get_cny_swaps_curve(fixing_type='FR007')
-    cny_swaps_2 = get_cny_swaps_curve(fixing_type='Shibor3M')
+    val_date, spot_instrument, fxfwd_instruments = get_cny_fx_curve()
+    cny_swaps_1 = get_cny_swaps_curve(val_date, fixing_type='FR007')
+    cny_swaps_2 = get_cny_swaps_curve(val_date, fixing_type='Shibor3M')
     curve_defs = [
         YieldCurveModel(
             fxfwd_instruments,
@@ -81,4 +82,4 @@ def construct(base_curve):
         YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7D'),
         YieldCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365, name='3M'),
     ]
-    return YieldCurveGroupModel(val_date_xccy, curve_defs, _calendar='CN', name='CNY')
+    return YieldCurveGroupModel(val_date, curve_defs, _calendar='CN', name='CNY')

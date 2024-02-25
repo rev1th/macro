@@ -3,7 +3,7 @@ from pydantic.dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from common.chrono import Tenor, Frequency, DayCount, BDayAdjust
+from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
 from models.currency import Currency
 
 
@@ -67,7 +67,7 @@ class SwapLegConvention():
     
     @property
     def coupon_adjust(self):
-        return BDayAdjust(self._coupon_adjust_type, self._spot_calendar)
+        return BDayAdjust(BDayAdjustType(self._coupon_adjust_type), self._spot_calendar)
     
     @property
     def coupon_pay_delay(self):
