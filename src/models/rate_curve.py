@@ -8,8 +8,10 @@ import logging
 import numpy as np
 
 from common.chrono import DayCount, get_bdate_series
+from common.model import NameDateClass
+
 from lib.interpolator import Interpolator
-from models.base_types import DataPoint, NamedDatedClass, get_fixing
+from models.base_types import DataPoint, get_fixing
 
 logger = logging.Logger(__name__)
 
@@ -25,7 +27,7 @@ class YieldCurveNode(DataPoint):
 # __init__ cannot be overriden so we declare InitVar and assign __post_init__
 # https://docs.python.org/3/library/dataclasses.html#init-only-variables
 @dataclass
-class YieldCurve(NamedDatedClass):
+class YieldCurve(NameDateClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
     interpolation_methods: InitVar[list[tuple[Optional[Union[dtm.date, int]], str]]] = [(None, 'Default')]
 

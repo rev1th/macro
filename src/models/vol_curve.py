@@ -5,14 +5,16 @@ from typing import ClassVar
 import datetime as dtm
 import logging
 
+from common.model import NameDateClass
+
 from lib.interpolator import Interpolator
-from models.base_types import DataPoint, NamedDatedClass
+from models.base_types import DataPoint
 
 logger = logging.Logger(__name__)
 
 
 @dataclass
-class VolCurve(NamedDatedClass):
+class VolCurve(NameDateClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
     interpolation_method: InitVar[str] = 'RootMeanSquare'
 

@@ -4,11 +4,12 @@ from dataclasses import field, KW_ONLY
 from abc import abstractmethod
 import datetime as dtm
 
-from models.base_types import NamedClass
+from common.model import NameClass
+
 from models.currency import Currency
 
 @dataclass
-class BaseInstrument(NamedClass):
+class BaseInstrument(NameClass):
     _: KW_ONLY
     _currency: Currency = Currency.USD
     _calendar: str = 'US-NY'

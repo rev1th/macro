@@ -1,9 +1,9 @@
 
 from pydantic.dataclasses import dataclass
-from dataclasses import field
 import datetime as dtm
 from sortedcontainers import SortedDict
 
+from common.model import NameClass
 
 # frozen=True generates hash function and makes it immutable
 @dataclass(frozen=True)
@@ -26,28 +26,10 @@ class DataPoint:
         return (self.date == other.date) and (self.value == other.value)
 
 
-# Mixin/Traits
-@dataclass()
-class NamedClass:
-    name: str = field(kw_only=True, default=None)
-
-    # @property
-    # def name(self) -> str:
-    #     return self._name
-
-@dataclass()
-class NamedDatedClass(NamedClass):
-    date: dtm.date
-
-    # @property
-    # def date(self) -> dtm.date:
-    #     return self._date
-
-
 # No validators for non-default classes like SortedDict, pandas.DataFrame
 # https://docs.pydantic.dev/latest/usage/model_config/#arbitrary-types-allowed
 @dataclass(config=dict(arbitrary_types_allowed = True))
-class FixingCurve(NamedClass):
+class FixingCurve(NameClass):
     _datevalue: SortedDict[dtm.date, float]
 
     def get(self, date: dtm.date):

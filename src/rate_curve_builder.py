@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from lib import solver
-from models.base_types import NamedClass, NamedDatedClass
+from common.model import NameClass, NameDateClass
 from common.chrono import DayCount, get_bdate_series
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
@@ -28,7 +28,7 @@ logger = logging.Logger(__name__)
 
 
 @dataclass
-class YieldCurveModel(NamedClass):
+class YieldCurveModel(NameClass):
 
     _instruments: list[CurveInstrument]
     _interpolation_methods: list[tuple[Optional[Union[dtm.date, int, str]], str]] = None
@@ -38,7 +38,7 @@ class YieldCurveModel(NamedClass):
     _rate_vol_curve: VolCurve = None
 
     _curve: ClassVar[YieldCurve]
-    _constructor: ClassVar[NamedDatedClass]
+    _constructor: ClassVar[NameDateClass]
     _knots: ClassVar[list[dtm.date]]
 
     @property
@@ -163,7 +163,7 @@ class YieldCurveModel(NamedClass):
 
 
 @dataclass
-class YieldCurveGroupModel(NamedDatedClass):
+class YieldCurveGroupModel(NameDateClass):
     _models: list[YieldCurveModel]
     _calendar: str = ''
 
