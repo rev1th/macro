@@ -19,16 +19,16 @@ def get_cny_swaps_curve(val_date: dtm.date, fixing_type: str = 'FR007') -> list[
         data_date, rates = data_cfets.load_fixings('FR')
         deposit = Deposit(date_lib.Tenor('7D'), name=fixing_type)
         deposit.set_market(data_date, rates[fixing_type] / 100)
-        swap_index = 'CNY7DR'
+        swap_convention = 'CNY_7DR'
     elif fixing_type == 'Shibor3M':
         data_date, rates = data_cfets.load_fixings('Shibor')
         deposit = Deposit(date_lib.Tenor('3M'), name=fixing_type)
         deposit.set_market(data_date, rates['3M'] / 100)
-        swap_index = 'CNYSHIBOR'
+        swap_convention = 'CNY_SHIBOR'
     assert val_date == data_date, "Valuation date and market data mismatch"
     swap_instruments = [deposit]
     for tenor, rate in swap_prices.items():
-        ins = DomesticSwap(_index=swap_index, _end=date_lib.Tenor(tenor), name=f'{swap_index}_{tenor}')
+        ins = DomesticSwap(_convention_name=swap_convention, _end=date_lib.Tenor(tenor), name=f'{swap_convention}_{tenor}')
         ins.set_market(data_date, rate)
         swap_instruments.append(ins)
     return swap_instruments
@@ -79,7 +79,7 @@ def construct(base_curve):
             _collateral_curve=base_curve,
             _collateral_spot=spot_instrument,
             name='OIS'),
-        YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7D'),
-        YieldCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365, name='3M'),
+        YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7DR'),
+        YieldCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365, name='SHIBOR'),
     ]
     return YieldCurveGroupModel(val_date, curve_defs, _calendar='CN', name='CNY')

@@ -96,7 +96,7 @@ SWAP_URL = 'https://www.cmegroup.com/services/sofr-strip-rates/'
 SWAP_DATE_FORMAT = '%Y%m%d'
 SWAP_MAP = {
     'SOFR': "sofrRates",
-    'FF': "sofrFedFundRates",
+    'SOFR_FF': "sofrFedFundRates",
 }
 def load_swap_data(fixing_type: str = 'SOFR') -> dict[dtm.date, dict[str, float]]:
     content_json = request.get_json(request.url_get(SWAP_URL, headers=HEADERS))

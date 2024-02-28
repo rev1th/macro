@@ -15,6 +15,11 @@ from models.vol_curve import VolCurve
 logger = logging.Logger(__name__)
 
 
+FIXING_SWAP_MAP = {
+    'SOFR':     ('USD_SOFR', DomesticSwap),
+    'SOFR_FF':  ('USD_FF_SOFR', BasisSwap),
+}
+
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
     fut_instruments_crv = []
     # futures_prices = data_cme.load_prices_ftp(contract_type)
@@ -46,18 +51,11 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
 def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.date = None) -> list[DomesticSwap]:
     swap_prices = data_cme.load_swap_data(fixing_type)
     assert val_date in swap_prices, f"Swap prices missing for {val_date}"
-    if fixing_type == 'FF':
-        swap_index = 'USDFFSOFR'
-    elif fixing_type == 'SOFR':
-        swap_index = 'USDSOFR'
+    swap_convention, swap_obj = FIXING_SWAP_MAP[fixing_type]
     swap_instruments = []
     for tenor, rate in swap_prices[val_date].items():
-        if fixing_type == 'FF':
-            ins = BasisSwap(_index=swap_index, _end=date_lib.Tenor(tenor), name=f'{swap_index}_{tenor}')
-            ins.set_market(val_date, rate)
-        elif fixing_type == 'SOFR':
-            ins = DomesticSwap(_index=swap_index, _end=date_lib.Tenor(tenor), name=f'{swap_index}_{tenor}')
-            ins.set_market(val_date, rate)
+        ins = swap_obj(_convention_name=swap_convention, _end=date_lib.Tenor(tenor), name=f'{swap_convention}_{tenor}')
+        ins.set_market(val_date, rate)
         if cutoff and ins.end_date <= cutoff:
             ins.exclude_knot = True
         swap_instruments.append(ins)
@@ -140,7 +138,7 @@ def construct():
     
     ff_futs_crv = get_futures_for_curve(ff_futs, val_dt, contract_type='FF')
     ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='FF-Vol')
-    ff_swaps = get_swaps_curve(val_dt, fixing_type='FF', cutoff=ff_fut_cutoff)
+    ff_swaps = get_swaps_curve(val_dt, fixing_type='SOFR_FF', cutoff=ff_fut_cutoff)
     ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
     curve_defs.append(YieldCurveModel(ff_curve_instruments,
                                       _interpolation_methods = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')],

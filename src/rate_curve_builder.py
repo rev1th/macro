@@ -12,7 +12,7 @@ from common.model import NameClass, NameDateClass
 from common.chrono import DayCount, get_bdate_series
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
-from models.swap import DomesticSwap, BasisSwap
+from models.swap import DomesticSwap, BasisSwap, SwapCommonC
 from models.fx import FXSpot, FXSwapC
 from models.rate_curve import YieldCurve
 from models.vol_curve import VolCurve
@@ -21,7 +21,7 @@ CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
 DF_UPPER_LIMIT = 1e1
 DF_LOWER_LIMIT = 1e-4
-CVXADJ_RATE_TOLERANCE = 0.3e-4
+CVXADJ_RATE_TOLERANCE = 0.1e-4
 EPSILON = 1e-4
 
 logger = logging.Logger(__name__)
@@ -115,7 +115,7 @@ class YieldCurveModel(NameClass):
             if isinstance(instrument, DomesticSwap):
                 return instrument.get_pv(forecast_curve=self.curve, discount_curve=self.constructor.models[0].curve)
             elif isinstance(instrument, BasisSwap):
-                return instrument.get_pv(leg1_forecast_curve=self.curve, discount_curve=self.constructor.models[0].curve)
+                return instrument.get_pv(leg1_forecast_curve=self.curve, leg2_forecast_curve=self.constructor.models[0].curve)
             else:
                 return instrument.get_pv(self.curve)
         else:
@@ -139,11 +139,16 @@ class YieldCurveModel(NameClass):
         if last_fixed_vol_date is None:
             last_fixed_vol_date = self.constructor.date
         for sw_ins in self.instruments:
-            if isinstance(sw_ins, DomesticSwap) and sw_ins.exclude_knot and sw_ins.end_date > last_fixed_vol_date:
-                fut_implied_par = sw_ins.get_par(self.curve)
-                sw_crv_diff = fut_implied_par - sw_ins.fix_rate
+            if isinstance(sw_ins, SwapCommonC) and sw_ins.exclude_knot and sw_ins.end_date > last_fixed_vol_date:
+                if isinstance(sw_ins, DomesticSwap):
+                    fut_implied_par = sw_ins.get_par(self.curve)
+                    sw_crv_diff = fut_implied_par - sw_ins.fix_rate
+                elif isinstance(sw_ins, BasisSwap):
+                    fut_implied_par = sw_ins.get_par(leg1_forecast_curve=self.curve,
+                                                     leg2_forecast_curve=self.constructor.models[0].curve)
+                    sw_crv_diff = fut_implied_par - sw_ins.spread
                 last_fixed_vol = self.vol_curve.get_vol(last_fixed_vol_date)
-                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par}, Market Rate={sw_ins.fix_rate}')
+                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par}, Market Rate={sw_ins.price}')
                 if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and last_fixed_vol > 0:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, last_fixed_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
@@ -155,7 +160,7 @@ class YieldCurveModel(NameClass):
                     vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
                     logger.critical(f'Rate Vol Adjusted {sw_ins.end_date} {vol_adjusted}')
                     self.vol_curve.update_node(last_fixed_vol_date, vol_adjusted)
-                    return self.constructor.calibrate_convexity(last_fixed_vol_date)
+                    return self.calibrate_convexity(last_fixed_vol_date)
                 else:
                     last_fixed_vol_date = sw_ins.end_date
                     self.vol_curve.add_node(last_fixed_vol_date, last_fixed_vol)
@@ -297,3 +302,4 @@ class YieldCurveGroupModel(NameDateClass):
             node_zrates[yc.name] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates
 
+RATE_CURVE_MAP: dict[str, YieldCurve] = {}

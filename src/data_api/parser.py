@@ -6,7 +6,7 @@ from .cme import DATE_FORMAT
 from common import io
 from models.base_types import FixingCurve
 from models.rate_future import RateFutureIMM, RateFutureSerial
-from models.swap_convention import SwapLegConvention
+from models.swap_convention import SwapLegConvention, SwapFixLegConvention, SwapFloatLegConvention
 
 
 def read_fixings(filename: str, date_col: str, rate_col: str) -> FixingCurve:
@@ -69,21 +69,22 @@ def read_swap_conventions(filename: str = 'swap_convention.csv') -> dict[tuple[s
     res = {}
     for id in df.index:
         df_row = df.loc[id]
-        kwargs = {}
+        kwargs = {
+            '_currency': df_row['Currency'],
+            '_spot_delay': df_row['SpotDelay'],
+            '_spot_calendar': df_row['SpotCalendar'],
+            '_coupon_frequency': df_row['CouponFrequency'],
+            '_daycount_type': df_row['DayCountType'],
+            # '_coupon_calendar': df_row['CouponCalendar'],
+            '_coupon_adjust_type': df_row['CouponAdjustType'],
+            '_coupon_pay_delay': df_row['CouponPayDelay'],
+        }
         if df_row['Type'] == 'FLOAT':
             kwargs['_fixing'] = df_row['Fixing']
             kwargs['_fixing_lag'] = df_row['FixingLag']
             if pd.notna(df_row['ResetFrequency']):
                 kwargs['_fixing_reset_frequency'] = df_row['ResetFrequency']
-        res[id] = SwapLegConvention(
-            _currency=df_row['Currency'],
-            _spot_delay=df_row['SpotDelay'],
-            _spot_calendar=df_row['SpotCalendar'],
-            _coupon_frequency=df_row['CouponFrequency'],
-            _daycount_type=df_row['DayCountType'],
-            # _coupon_calendar=df_row['CouponCalendar'],
-            _coupon_adjust_type=df_row['CouponAdjustType'],
-            _coupon_pay_delay=df_row['CouponPayDelay'],
-            **kwargs,
-        )
+            res[id] = SwapFloatLegConvention(**kwargs)
+        else:
+            res[id] = SwapFixLegConvention(**kwargs)
     return res

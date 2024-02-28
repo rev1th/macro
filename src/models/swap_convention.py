@@ -1,5 +1,6 @@
 
 from pydantic.dataclasses import dataclass
+from dataclasses import field
 from enum import Enum
 from typing import Optional
 
@@ -7,6 +8,7 @@ from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
 from models.currency import Currency
 
 
+@dataclass(frozen=True)
 class NotionalExchangeType(Enum):
 
     NONE = 'NONE'
@@ -28,8 +30,8 @@ class NotionalExchangeType(Enum):
         return False
 
 
-@dataclass
-class SwapLegConvention():
+@dataclass(frozen=True)
+class SwapLegConvention:
     _currency: str
     _spot_delay: str
     _spot_calendar: str
@@ -40,12 +42,7 @@ class SwapLegConvention():
     _coupon_pay_delay: str
     # _coupon_pay_calendar: str = None
 
-    _fixing: Optional[str] = None
-    _fixing_lag: Optional[str] = None
-    _fixing_calendar: str = None
-    _fixing_reset_frequency: Optional[str] = None
-    
-    _notional_exchange_type: str = 'NONE'
+    _notional_exchange_type: str = field(kw_only=True, default='NONE')
     # _notional_pay_delay: str = None
     # _notional_pay_calendar: str = None
 
@@ -74,6 +71,22 @@ class SwapLegConvention():
         return Tenor((self._coupon_pay_delay, self._spot_calendar))
     
     @property
+    def notional_exchange(self):
+        return NotionalExchangeType(self._notional_exchange_type)
+
+@dataclass(frozen=True)
+class SwapFixLegConvention(SwapLegConvention):
+    pass
+
+@dataclass(frozen=True)
+class SwapFloatLegConvention(SwapLegConvention):
+
+    _fixing: str
+    _fixing_lag: str
+    _fixing_calendar: Optional[str] = None
+    _fixing_reset_frequency: Optional[str] = None
+    
+    @property
     def fixing(self) -> str:
         return self._fixing
     
@@ -88,14 +101,10 @@ class SwapLegConvention():
     @property
     def fixing_reset_frequency(self):
         return Frequency(self._fixing_reset_frequency)
-    
-    @property
-    def notional_exchange(self):
-        return NotionalExchangeType(self._notional_exchange_type)
 
 
 @dataclass(frozen=True)
-class SwapConvention():
+class SwapConvention:
     _code: str
     _leg1: SwapLegConvention = None
     _leg2: SwapLegConvention = None
