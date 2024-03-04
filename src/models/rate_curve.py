@@ -11,7 +11,8 @@ from common.chrono import DayCount, get_bdate_series
 from common.model import NameDateClass
 
 from lib.interpolator import Interpolator
-from models.base_types import DataPoint, get_fixing
+from models.base_types import DataPoint
+from models.fixing import Fixing, get_fixing
 
 logger = logging.Logger(__name__)
 
@@ -135,14 +136,14 @@ class YieldCurve(NameDateClass):
         to_df = self.get_df(to_date)
         return (from_df / to_df - 1) / self.get_dcf(from_date, to_date)
 
-    def get_forecast_rate(self, from_date: dtm.date, to_date: dtm.date, underlying: str = None) -> float:
+    def get_forecast_rate(self, from_date: dtm.date, to_date: dtm.date, fixing: Fixing = None) -> float:
         assert from_date <= to_date, f"Invalid period to calculate forecast rate {from_date}-{to_date}"
 
         if from_date < self.date:
             bdates = get_bdate_series(from_date, min(to_date, self.date), self._calendar)
             amount = 1
             for i in range(len(bdates)-1):
-                amount *= (1 + get_fixing(underlying, bdates[i]) * self.get_dcf(bdates[i], bdates[i+1]))
+                amount *= (1 + get_fixing(fixing, bdates[i]) * self.get_dcf(bdates[i], bdates[i+1]))
             
             if to_date <= self.date:
                 return (amount - 1) / self.get_dcf(from_date, self.date)

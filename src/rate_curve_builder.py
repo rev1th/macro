@@ -21,7 +21,7 @@ CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
 DF_UPPER_LIMIT = 1e1
 DF_LOWER_LIMIT = 1e-4
-CVXADJ_RATE_TOLERANCE = 0.1e-4
+CVXADJ_RATE_TOLERANCE = 0.2e-4
 EPSILON = 1e-4
 
 logger = logging.Logger(__name__)
@@ -113,9 +113,9 @@ class YieldCurveModel(NameClass):
             return instrument.get_pv(self.curve, ref_discount_curve=self.collateral_curve, spot=self.collateral_spot)
         elif self != self.constructor.models[0]:
             if isinstance(instrument, DomesticSwap):
-                return instrument.get_pv(forecast_curve=self.curve, discount_curve=self.constructor.models[0].curve)
+                return instrument.get_pv(forward_curve=self.curve, discount_curve=self.constructor.models[0].curve)
             elif isinstance(instrument, BasisSwap):
-                return instrument.get_pv(leg1_forecast_curve=self.curve, leg2_forecast_curve=self.constructor.models[0].curve)
+                return instrument.get_pv(leg1_forward_curve=self.curve, leg2_forward_curve=self.constructor.models[0].curve)
             else:
                 return instrument.get_pv(self.curve)
         else:
@@ -144,15 +144,15 @@ class YieldCurveModel(NameClass):
                     fut_implied_par = sw_ins.get_par(self.curve)
                     sw_crv_diff = fut_implied_par - sw_ins.fix_rate
                 elif isinstance(sw_ins, BasisSwap):
-                    fut_implied_par = sw_ins.get_par(leg1_forecast_curve=self.curve,
-                                                     leg2_forecast_curve=self.constructor.models[0].curve)
+                    fut_implied_par = sw_ins.get_par(leg1_forward_curve=self.curve,
+                                                     leg2_forward_curve=self.constructor.models[0].curve)
                     sw_crv_diff = fut_implied_par - sw_ins.spread
                 last_fixed_vol = self.vol_curve.get_vol(last_fixed_vol_date)
-                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par}, Market Rate={sw_ins.price}')
+                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.price}')
                 if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and last_fixed_vol > 0:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, last_fixed_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
-                    pv01_unit = sw_ins.get_pv01(self.curve) * 10000 / sw_ins.notional
+                    pv01_unit = abs(sw_ins.get_pv01(self.curve) * 10000 / sw_ins.notional)
                     var_offset = np.log(1 + sw_crv_diff * pv01_unit / self.curve.get_df(sw_ins.end_date)) *\
                                     12 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
                     # var_offset = sw_crv_diff * 12 * sw_dcf_2 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)

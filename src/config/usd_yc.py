@@ -3,8 +3,8 @@ import datetime as dtm
 import logging
 
 import common.chrono as date_lib
-from models.base_types import FIXING_CURVE_MAP
-from models.swap_convention import SWAP_CONVENTION_MAP
+from models.fixing import add_fixing_curve
+from models.swap_convention import add_swap_convention
 from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
@@ -98,11 +98,11 @@ def construct():
     ff_serials = data_parser.read_serial_futures(filename='FF.csv', underlying='EFFR', name_col='productCode',
                                                  expiry_col='lastTrade', settle_col='settlement')
     
-    for r in [sofr_rates, ff_rates]:
-        FIXING_CURVE_MAP[r.name] = r
+    for fc in [sofr_rates, ff_rates]:
+        add_fixing_curve(fc)
     
     for k, v in data_parser.read_swap_conventions().items():
-        SWAP_CONVENTION_MAP[k] = v
+        add_swap_convention(*k, v)
     
     next_btenor = date_lib.Tenor(('1B', us_cal))
     meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)

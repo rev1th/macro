@@ -23,14 +23,3 @@ if __name__ == '__main__':
     # plotter.display_bond_curves(*us_bonds.get_graph_info(*us_bonds.construct()))
     for ycg in evaluate():
         plotter.display_rate_curves(*ycg.get_graph_info())
-
-# python -m src.data_api.nyfed
-# python -m src.data_api.cme
-
-# pip uninstall common -y
-# pip install ..\common\dist\common-1.0-py3-none-any.whl
-
-# python -m cProfile -o profile src\main.py
-# import pstats
-# p = pstats.Stats(r'profile')
-# p.strip_dirs().sort_stats(pstats.SortKey.CUMULATIVE).print_stats(25)

@@ -6,6 +6,7 @@ from typing import Optional
 
 from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
 from models.currency import Currency
+from models.fixing import Fixing
 
 
 @dataclass(frozen=True)
@@ -87,8 +88,8 @@ class SwapFloatLegConvention(SwapLegConvention):
     _fixing_reset_frequency: Optional[str] = None
     
     @property
-    def fixing(self) -> str:
-        return self._fixing
+    def fixing(self):
+        return Fixing(self._fixing)
     
     @property
     def fixing_calendar(self):
@@ -103,28 +104,13 @@ class SwapFloatLegConvention(SwapLegConvention):
         return Frequency(self._fixing_reset_frequency)
 
 
+# https://stackoverflow.com/questions/53756788/how-to-set-the-value-of-dataclass-field-in-post-init-when-frozen-true
 @dataclass(frozen=True)
 class SwapConvention:
     _code: str
     _leg1: SwapLegConvention = None
     _leg2: SwapLegConvention = None
     
-    # https://stackoverflow.com/questions/53756788/how-to-set-the-value-of-dataclass-field-in-post-init-when-frozen-true
-    def __post_init__(self):
-        for k, v in SWAP_CONVENTION_MAP.items():
-            if k[0] == self._code:
-                if k[1] == 1:
-                    object.__setattr__(self, '_leg1', v)
-                elif k[1] == 2:
-                    object.__setattr__(self, '_leg2', v)
-                else:
-                    raise Exception(f'Invalid leg id found {v}')
-        # leg_codes = self._code.split('-')
-        # leg_codes_sub = [c.split('_') for c in leg_codes]
-        # if len(leg_codes_sub) == 1:
-        #     leg_codes_sub = [[leg_codes_sub[0][0]]] + leg_codes_sub
-        # return leg_codes_sub
-
     @property
     def leg1(self):
         return self._leg1
@@ -133,4 +119,26 @@ class SwapConvention:
     def leg2(self):
         return self._leg2
 
-SWAP_CONVENTION_MAP: dict[tuple[str, int], SwapLegConvention] = {}
+
+SWAP_CONVENTION_MAP: dict[str, SwapConvention] = {}
+
+def add_swap_convention(name: str, leg_id: int, leg_conv: SwapLegConvention) -> None:
+    kwargs = {}
+    if name in SWAP_CONVENTION_MAP:
+        if leg_id == 1:
+            kwargs = {'_leg1': leg_conv, '_leg2': SWAP_CONVENTION_MAP[name].leg2}
+        elif leg_id == 2:
+            kwargs = {'_leg1': SWAP_CONVENTION_MAP[name].leg1, '_leg2': leg_conv}
+        else:
+            raise Exception(f'Invalid leg id found {leg_id}')
+    else:
+        if leg_id == 1:
+            kwargs = {'_leg1': leg_conv}
+        elif leg_id == 2:
+            kwargs = {'_leg2': leg_conv}
+        else:
+            raise Exception(f'Invalid leg id found {leg_id}')
+    SWAP_CONVENTION_MAP[name] = SwapConvention(name, **kwargs)
+
+def get_swap_convention(name: str):
+    return SWAP_CONVENTION_MAP[name]
