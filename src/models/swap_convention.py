@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
-from models.currency import Currency
+from common.currency import Currency
 from models.fixing import Fixing
 
 

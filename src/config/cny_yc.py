@@ -3,11 +3,12 @@ import datetime as dtm
 import logging
 
 import common.chrono as date_lib
+from common.currency import Currency
+
 import data_api.cfets as data_cfets
 from rate_curve_builder import YieldCurveModel, YieldCurveGroupModel
 from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap
-from models.currency import Currency
 from models.fx import FXSwapC, FXSpot
 
 logger = logging.Logger(__name__)

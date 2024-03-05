@@ -5,8 +5,7 @@ from abc import abstractmethod
 import datetime as dtm
 
 from common.model import NameClass
-
-from models.currency import Currency
+from common.currency import Currency
 
 @dataclass
 class BaseInstrument(NameClass):

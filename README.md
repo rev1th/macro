@@ -1,3 +1,6 @@
+# Setup
+git clone https://github.com/rev1th/common.git<br />
+conda env create -f environment.yml
 
 ## Update rate fixings (daily)
 ```

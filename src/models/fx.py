@@ -4,8 +4,8 @@ from dataclasses import field, KW_ONLY
 import datetime as dtm
 
 from common.chrono import Tenor
+from common.currency import Currency
 from models.abstract_instrument import BaseInstrument
-from models.currency import Currency
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_curve import YieldCurve
 
