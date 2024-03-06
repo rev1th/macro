@@ -65,8 +65,6 @@ class SwapCommon(BaseInstrument):
         super().set_market(date)
         self._leg1.set_market(date, rate1)
         self._leg2.set_market(date, rate2)
-        self._knot = self.end_date
-        assert date <= self.knot, "Valuation date cannot be after expiry"
     
     @abstractmethod
     def get_par(self, _: YieldCurve) -> float:
@@ -78,7 +76,11 @@ class SwapCommon(BaseInstrument):
 
 @dataclass
 class SwapCommonC(SwapCommon, CurveInstrument):
-    pass
+    
+    def set_market(self, date: dtm.date, rate1: float = 0, rate2: float = 0) -> None:
+        super().set_market(date, rate1, rate2)
+        self._knot = self.end_date
+        assert date <= self.knot, "Valuation date cannot be after expiry"
 
 # Single currency Fix vs Float
 @dataclass

@@ -1,16 +1,16 @@
 
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from enum import Enum
+from enum import StrEnum
 from typing import Optional
 
 from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
 from common.currency import Currency
-from models.fixing import Fixing
+from models.fixing import Fixing, RateFixingType
 
 
 @dataclass(frozen=True)
-class NotionalExchangeType(Enum):
+class NotionalExchangeType(StrEnum):
 
     NONE = 'NONE'
     INITIAL_FINAL = 'INITIAL_FINAL'
@@ -83,13 +83,18 @@ class SwapFixLegConvention(SwapLegConvention):
 class SwapFloatLegConvention(SwapLegConvention):
 
     _fixing: str
+    _fixing_type: str
     _fixing_lag: str
     _fixing_calendar: Optional[str] = None
-    _fixing_reset_frequency: Optional[str] = None
+    _reset_frequency: Optional[str] = None
     
     @property
     def fixing(self):
         return Fixing(self._fixing)
+    
+    @property
+    def fixing_type(self):
+        return RateFixingType(self._fixing_type)
     
     @property
     def fixing_calendar(self):
@@ -100,8 +105,11 @@ class SwapFloatLegConvention(SwapLegConvention):
         return Tenor((self._fixing_lag, self.fixing_calendar))
     
     @property
-    def fixing_reset_frequency(self):
-        return Frequency(self._fixing_reset_frequency)
+    def reset_frequency(self):
+        return Frequency(self._reset_frequency)
+    
+    def is_interim_reset(self) -> bool:
+        return self.fixing_type == RateFixingType.IBOR and self.reset_frequency != self.coupon_frequency
 
 
 # https://stackoverflow.com/questions/53756788/how-to-set-the-value-of-dataclass-field-in-post-init-when-frozen-true

@@ -81,9 +81,10 @@ def read_swap_conventions(filename: str = 'swap_convention.csv') -> dict[tuple[s
         }
         if df_row['Type'] == 'FLOAT':
             kwargs['_fixing'] = df_row['Fixing']
+            kwargs['_fixing_type'] = df_row['FixingType']
             kwargs['_fixing_lag'] = df_row['FixingLag']
             if pd.notna(df_row['ResetFrequency']):
-                kwargs['_fixing_reset_frequency'] = df_row['ResetFrequency']
+                kwargs['_reset_frequency'] = df_row['ResetFrequency']
             res[id] = SwapFloatLegConvention(**kwargs)
         else:
             res[id] = SwapFixLegConvention(**kwargs)

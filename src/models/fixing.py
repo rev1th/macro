@@ -1,5 +1,6 @@
 
 from pydantic.dataclasses import dataclass
+from enum import StrEnum
 from sortedcontainers import SortedDict
 import datetime as dtm
 
@@ -9,6 +10,12 @@ from common.model import NameClass
 @dataclass(frozen=True)
 class Fixing:
     name: str
+
+
+class RateFixingType(StrEnum):
+
+    RFR = 'RFR'
+    IBOR = 'IBOR'
 
 
 # No validators for non-default classes like SortedDict, pandas.DataFrame

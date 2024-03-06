@@ -12,7 +12,7 @@ from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType
 
 BOND_PAR = 100
 
-class PriceType(StrEnum):
+class BondPriceType(StrEnum):
     CLEAN = 'clean'
     DIRTY = 'dirty'
 
@@ -30,7 +30,7 @@ class BondGeneric(BaseInstrument):
     _settle_delay: Tenor = field(kw_only=True, default_factory=Tenor.bday)
 
     _price: float = field(init=False, default=None)
-    _price_type: PriceType = field(init=False, default=PriceType.CLEAN)
+    _price_type: BondPriceType = field(init=False, default=BondPriceType.CLEAN)
 
     settle_date: ClassVar[dtm.date]
     
@@ -137,7 +137,7 @@ class Bond(BondGeneric):
             df /= (1 + yld * yc_dcf) ** (c_dcf / yc_dcf)
             pv += self.coupon * c_dcf * df
         pv += df
-        if self.price_type == PriceType.CLEAN:
+        if self.price_type == BondPriceType.CLEAN:
             pv -= self.get_acrrued_interest()
         return pv * BOND_PAR
 
