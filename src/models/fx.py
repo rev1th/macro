@@ -7,7 +7,7 @@ from common.chrono import Tenor
 from common.currency import Currency
 from models.abstract_instrument import BaseInstrument
 from models.rate_curve_instrument import CurveInstrument
-from models.rate_curve import YieldCurve
+from models.rate_curve import RateCurve
 
 
 @dataclass
@@ -106,7 +106,7 @@ class FXSwapC(FXSwap, CurveInstrument):
         super().set_market(date, points, settle_date, near_date)
         self._end = settle_date
 
-    def get_pv(self, discount_curve: YieldCurve, ref_discount_curve: YieldCurve, spot: FXSpot) -> float:
+    def get_pv(self, discount_curve: RateCurve, ref_discount_curve: RateCurve, spot: FXSpot) -> float:
         if self.far_leg_settle_date and self.far_leg_settle_date != spot.settle_date:
             ccy1_far_df = discount_curve.get_df(self.far_leg_settle_date) / discount_curve.get_df(spot.settle_date)
             ccy2_far_df = ref_discount_curve.get_df(self.far_leg_settle_date) / ref_discount_curve.get_df(spot.settle_date)

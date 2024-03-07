@@ -9,7 +9,7 @@ from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap, BasisSwap
 import data_api.parser as data_parser
 import data_api.cme as data_cme
-from rate_curve_builder import YieldCurveModel, YieldCurveGroupModel
+from rate_curve_builder import RateCurveModel, RateCurveGroupModel
 from models.vol_curve import VolCurve
 
 logger = logging.Logger(__name__)
@@ -123,7 +123,7 @@ def construct():
     rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='OIS-Vol')
     swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff)
     curve_instruments = [deposit] + futs_crv + swaps
-    curve_defs = [YieldCurveModel(curve_instruments,
+    curve_defs = [RateCurveModel(curve_instruments,
                                   _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
                                   _rate_vol_curve=rate_vol_curve,
                                   name='OIS')]
@@ -140,10 +140,12 @@ def construct():
     ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='FF-Vol')
     ff_swaps = get_swaps_curve(val_dt, fixing_type='SOFR_FF', cutoff=ff_fut_cutoff)
     ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
-    curve_defs.append(YieldCurveModel(ff_curve_instruments,
+    curve_defs.append(RateCurveModel(ff_curve_instruments,
                                       _interpolation_methods = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')],
                                       _rate_vol_curve=ff_rate_vol_curve,
+                                      _collateral_curve='USD-OIS',
+                                      _spread_from='USD-OIS',
                                       name='FF'))
     
-    return YieldCurveGroupModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
+    return RateCurveGroupModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
 

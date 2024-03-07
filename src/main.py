@@ -10,10 +10,9 @@ logger.setLevel(logging.DEBUG)
 
 def evaluate():
     ycg_usd = usd_yc.construct()
-    ycg_usd.calibrate_convexity()
-    # ycs_usd.build()
+    ycg_usd.build(calibrate_convexity=True)
 
-    ycg_cny = cny_yc.construct(ycg_usd.curves[0])
+    ycg_cny = cny_yc.construct()
     ycg_cny.build()
 
     return [ycg_usd, ycg_cny]

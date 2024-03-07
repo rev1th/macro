@@ -7,7 +7,7 @@ import datetime as dtm
 import numpy as np
 
 from models.abstract_instrument import BaseInstrument
-from models.rate_curve import YieldCurve
+from models.rate_curve import RateCurve
 from common.chrono import Tenor
 
 
@@ -78,7 +78,7 @@ class Deposit(CurveInstrument):
         super().set_market(date)
         self._rate = fixing
 
-    def get_pv(self, curve: YieldCurve) -> float:
+    def get_pv(self, curve: RateCurve) -> float:
         fcast_rate = curve.get_forward_rate(self.start_date, self.end_date)
         period_dcf = curve.get_dcf(self.start_date, self.end_date)
         fcast_rate *= period_dcf

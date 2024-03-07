@@ -9,7 +9,7 @@ from common.chrono import Tenor
 from models.abstract_instrument import BaseInstrument
 from models.swap_convention import SwapConvention, get_swap_convention
 from models.rate_curve_instrument import CurveInstrument
-from models.rate_curve import YieldCurve
+from models.rate_curve import RateCurve
 from models.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
 
 
@@ -67,11 +67,11 @@ class SwapCommon(BaseInstrument):
         self._leg2.set_market(date, rate2)
     
     @abstractmethod
-    def get_par(self, _: YieldCurve) -> float:
+    def get_par(self, _: RateCurve) -> float:
         """Get Par rate for Swap"""
 
     @abstractmethod
-    def get_pv01(self, _: YieldCurve) -> float:
+    def get_pv01(self, _: RateCurve) -> float:
         """Get PV01 for Swap"""
 
 @dataclass
@@ -114,19 +114,19 @@ class DomesticSwap(SwapCommonC):
         super().set_market(date, rate1=rate)
         self._rate = rate
     
-    def get_pv(self, forward_curve: YieldCurve, discount_curve: YieldCurve = None) -> float:
+    def get_pv(self, forward_curve: RateCurve, discount_curve: RateCurve = None) -> float:
         if not discount_curve:
             discount_curve = forward_curve
         float_pv = self._float_leg.get_pv(forward_curve=forward_curve, discount_curve=discount_curve)
         return self._fix_leg.get_pv(discount_curve) + float_pv
     
-    def get_par(self, forward_curve: YieldCurve, discount_curve: YieldCurve = None) -> float:
+    def get_par(self, forward_curve: RateCurve, discount_curve: RateCurve = None) -> float:
         if not discount_curve:
             discount_curve = forward_curve
         pv = self.get_pv(forward_curve=forward_curve, discount_curve=discount_curve)
         return self._rate * self._units - pv / self._fix_leg.get_annuity(discount_curve)
 
-    def get_pv01(self, discount_curve: YieldCurve) -> float:
+    def get_pv01(self, discount_curve: RateCurve) -> float:
         return self._fix_leg.get_annuity(discount_curve) / 10000
 
 
@@ -169,8 +169,8 @@ class BasisSwap(SwapCommonC):
         return self._spread * self._units
     
     def get_pv(self,
-               leg1_forward_curve: YieldCurve, leg2_forward_curve: YieldCurve,
-               discount_curve: YieldCurve = None) -> float:
+               leg1_forward_curve: RateCurve, leg2_forward_curve: RateCurve,
+               discount_curve: RateCurve = None) -> float:
         if not discount_curve:
             discount_curve = leg2_forward_curve
         leg1_pv = self._leg1.get_pv(forward_curve=leg1_forward_curve, discount_curve=discount_curve)
@@ -178,8 +178,8 @@ class BasisSwap(SwapCommonC):
         return leg1_pv + leg2_pv
 
     def get_par(self,
-                leg1_forward_curve: YieldCurve, leg2_forward_curve: YieldCurve,
-                discount_curve: YieldCurve = None) -> float:
+                leg1_forward_curve: RateCurve, leg2_forward_curve: RateCurve,
+                discount_curve: RateCurve = None) -> float:
         if not discount_curve:
             discount_curve = leg2_forward_curve
         pv = self.get_pv(
@@ -188,7 +188,7 @@ class BasisSwap(SwapCommonC):
             discount_curve=discount_curve)
         return self._spread * self._units - pv / self.spread_leg.get_annuity(discount_curve)
 
-    def get_pv01(self, discount_curve: YieldCurve) -> float:
+    def get_pv01(self, discount_curve: RateCurve) -> float:
         return self.spread_leg.get_annuity(discount_curve) / 10000
 
 
@@ -197,9 +197,9 @@ class BasisSwap(SwapCommonC):
 class XCCYSwap(DomesticSwap):
 
     def get_pv(self,
-               leg1_discount_curve: YieldCurve,
-               leg2_discount_curve: YieldCurve,
-               leg2_forward_curve: YieldCurve = None) -> float:
+               leg1_discount_curve: RateCurve,
+               leg2_discount_curve: RateCurve,
+               leg2_forward_curve: RateCurve = None) -> float:
         return self._leg1.get_pv(leg1_discount_curve) + self._leg2.get_pv(leg2_forward_curve, leg2_discount_curve)
 
 
@@ -208,9 +208,9 @@ class XCCYSwap(DomesticSwap):
 class XCCYBasisSwap(BasisSwap):
 
     def get_pv(self,
-               leg1_forward_curve: YieldCurve,
-               leg1_discount_curve: YieldCurve,
-               leg2_discount_curve: YieldCurve,
-               leg2_forward_curve: YieldCurve = None) -> float:
+               leg1_forward_curve: RateCurve,
+               leg1_discount_curve: RateCurve,
+               leg2_discount_curve: RateCurve,
+               leg2_forward_curve: RateCurve = None) -> float:
         return self._leg1.get_pv(leg1_forward_curve, leg1_discount_curve) + self._leg2.get_pv(leg2_forward_curve, leg2_discount_curve)
 

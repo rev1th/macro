@@ -1,6 +1,6 @@
 
 from pydantic.dataclasses import dataclass
-from dataclasses import InitVar
+from dataclasses import InitVar, KW_ONLY
 from typing import ClassVar, Union, Optional
 import datetime as dtm
 import bisect
@@ -19,7 +19,7 @@ logger = logging.Logger(__name__)
 
 # https://stackoverflow.com/questions/53990296/how-do-i-make-a-python-dataclass-inherit-hash
 @dataclass(frozen=True)
-class YieldCurveNode(DataPoint):
+class RateCurveNode(DataPoint):
 
     @property
     def discountfactor(self):
@@ -28,20 +28,21 @@ class YieldCurveNode(DataPoint):
 # __init__ cannot be overriden so we declare InitVar and assign __post_init__
 # https://docs.python.org/3/library/dataclasses.html#init-only-variables
 @dataclass
-class YieldCurve(NameDateClass):
+class RateCurve(NameDateClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
+    _: KW_ONLY
     interpolation_methods: InitVar[list[tuple[Optional[Union[dtm.date, int]], str]]] = [(None, 'Default')]
 
     _daycount_type: DayCount = DayCount.ACT360
     _calendar: str = ''
 
-    _nodes: ClassVar[list[YieldCurveNode]]
+    _nodes: ClassVar[list[RateCurveNode]]
     _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]
 
     def __post_init__(self, nodes_init, interpolation_methods: list[str]):
         assert len(nodes_init) > 0, "Cannot build rate curve without nodes"
         assert nodes_init[0][0] > self.date, f"First node {nodes_init[0][0]} should be after valuation date {self.date}"
-        self._nodes = [YieldCurveNode(nd[0], nd[1]) for nd in nodes_init]
+        self._nodes = [RateCurveNode(nd[0], nd[1]) for nd in nodes_init]
         self._interpolation_dates = [self.date]
         self._interpolator_classes = []
         for cto, im in interpolation_methods:
@@ -69,7 +70,7 @@ class YieldCurve(NameDateClass):
             return cutoff
     
     def _set_interpolators(self, reset: bool = True) -> None:
-        nodes = [YieldCurveNode(self.date, 1)] + self._nodes
+        nodes = [RateCurveNode(self.date, 1)] + self._nodes
         for id, ic in enumerate(self._interpolator_classes):
             cto_d = self._interpolation_dates[id]
             cto_d_next = self._interpolation_dates[id+1]
@@ -101,7 +102,7 @@ class YieldCurve(NameDateClass):
     def update_node(self, date: dtm.date, value: float) -> None:
         for i, node in enumerate(self._nodes):
             if node.date == date:
-                self._nodes[i] = YieldCurveNode(date, value)
+                self._nodes[i] = RateCurveNode(date, value)
                 self._set_interpolators(reset=False)
                 return
         raise Exception(f"Invalid date {date} to set node")
@@ -109,7 +110,7 @@ class YieldCurve(NameDateClass):
     def update_nodes(self, log_values: list[float]) -> None:
         assert len(self._nodes) == len(log_values), f"Inputs don't fit nodes {len(log_values)}"
         for i, node in enumerate(self._nodes):
-            self._nodes[i] = YieldCurveNode(node.date, np.exp(log_values[i]))
+            self._nodes[i] = RateCurveNode(node.date, np.exp(log_values[i]))
         self._set_interpolators(reset=False)
         return
     
@@ -163,3 +164,13 @@ class YieldCurve(NameDateClass):
         except Exception as e:
             logger.critical(f"Failed to find zero rate for {date} {e}")
             return None
+
+@dataclass
+class SpreadCurve(RateCurve):
+    _base_curve: RateCurve
+    
+    def get_spread_df(self, date: dtm.date) -> float:
+        return super().get_df(date)
+    
+    def get_df(self, date: dtm.date) -> float:
+        return self._base_curve.get_df(date) * super().get_df(date)

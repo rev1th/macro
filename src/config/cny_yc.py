@@ -6,7 +6,7 @@ import common.chrono as date_lib
 from common.currency import Currency
 
 import data_api.cfets as data_cfets
-from rate_curve_builder import YieldCurveModel, YieldCurveGroupModel
+from rate_curve_builder import RateCurveModel, RateCurveGroupModel
 from models.rate_curve_instrument import Deposit
 from models.swap import DomesticSwap
 from models.fx import FXSwapC, FXSpot
@@ -68,19 +68,19 @@ def get_cny_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwa
     return data_date, spot_ins, fxfwd_ins
 
 
-def construct(base_curve):
+def construct():
     val_date, spot_instrument, fxfwd_instruments = get_cny_fx_curve()
     cny_swaps_1 = get_cny_swaps_curve(val_date, fixing_type='FR007')
     cny_swaps_2 = get_cny_swaps_curve(val_date, fixing_type='Shibor3M')
     curve_defs = [
-        YieldCurveModel(
+        RateCurveModel(
             fxfwd_instruments,
             _interpolation_methods = [('CNY_1M', 'LogLinear'), (None, 'LogCubic')], # MonotoneConvex
             _daycount_type=date_lib.DayCount.ACT365,
-            _collateral_curve=base_curve,
+            _collateral_curve='USD-OIS',
             _collateral_spot=spot_instrument,
             name='OIS'),
-        YieldCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7DR'),
-        YieldCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT365, name='SHIBOR'),
+        RateCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7DR'),
+        RateCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT360, _collateral_curve='CNY-7DR', name='SHIBOR'),
     ]
-    return YieldCurveGroupModel(val_date, curve_defs, _calendar='CN', name='CNY')
+    return RateCurveGroupModel(val_date, curve_defs, _calendar='CN', name='CNY')

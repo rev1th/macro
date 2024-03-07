@@ -9,7 +9,7 @@ from models.abstract_instrument import Future
 from models.rate_curve_instrument import CurveInstrument
 from common.chrono import Tenor, DayCount, get_bdate_series
 from models.fixing import Fixing, get_fixing
-from models.rate_curve import YieldCurve
+from models.rate_curve import RateCurve
 from models.vol_curve import VolCurve
 
 
@@ -55,7 +55,7 @@ class RateFutureC(RateFuture, CurveInstrument):
     def __post_init__(self):
         self._end = self.expiry
     
-    def get_pv(self, curve: YieldCurve) -> float:
+    def get_pv(self, curve: RateCurve) -> float:
         return self.notional * (1 - self.get_settle_rate(curve) - (self.price + self.convexity) / 100)
 
 
@@ -66,7 +66,7 @@ class RateFutureIMM(RateFutureC):
         super().__post_init__()
         self._rate_end = self.settle_date
     
-    def get_settle_rate(self, curve: YieldCurve) -> float:
+    def get_settle_rate(self, curve: RateCurve) -> float:
         return curve.get_forecast_rate(self.rate_start_date, self.settle_date, Fixing(self.underlying))
 
 
@@ -89,7 +89,7 @@ class RateFutureSerial(RateFutureC):
     def set_market(self, date: dtm.date, price: float) -> None:
         super().set_market(date, price)
     
-    def get_settle_rate(self, curve: YieldCurve) -> float:
+    def get_settle_rate(self, curve: RateCurve) -> float:
         settle_rate = 0
         bdates = self.fixing_dates
         for di in range(0, len(bdates)-1):

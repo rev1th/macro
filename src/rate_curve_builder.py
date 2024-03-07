@@ -14,7 +14,7 @@ from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
 from models.swap import DomesticSwap, BasisSwap, SwapCommonC
 from models.fx import FXSpot, FXSwapC
-from models.rate_curve import YieldCurve
+from models.rate_curve import RateCurve, SpreadCurve
 from models.vol_curve import VolCurve
 
 CURVE_SOLVER_MAX_ITERATIONS = 10
@@ -28,16 +28,17 @@ logger = logging.Logger(__name__)
 
 
 @dataclass
-class YieldCurveModel(NameClass):
+class RateCurveModel(NameClass):
 
     _instruments: list[CurveInstrument]
     _interpolation_methods: list[tuple[Optional[Union[dtm.date, int, str]], str]] = None
     _daycount_type: DayCount = None
-    _collateral_curve: YieldCurve = None
+    _collateral_curve: str = None
     _collateral_spot: FXSpot = None
     _rate_vol_curve: VolCurve = None
+    _spread_from: str = None
 
-    _curve: ClassVar[YieldCurve]
+    _curve: ClassVar[RateCurve]
     _constructor: ClassVar[NameDateClass]
     _knots: ClassVar[list[dtm.date]]
 
@@ -46,11 +47,11 @@ class YieldCurveModel(NameClass):
         return self._instruments
     
     @property
-    def collateral_curve(self) -> YieldCurve:
-        return self._collateral_curve
+    def collateral_curve(self) -> RateCurve:
+        return get_rate_curve(self._collateral_curve)
     
     @property
-    def collateral_spot(self) -> YieldCurve:
+    def collateral_spot(self):
         return self._collateral_spot
     
     @property
@@ -58,8 +59,12 @@ class YieldCurveModel(NameClass):
         return self._rate_vol_curve
     
     @property
-    def curve(self) -> YieldCurve:
+    def curve(self) -> RateCurve:
         return self._curve
+    
+    @property
+    def spread_from(self) -> RateCurve:
+        return get_rate_curve(self._spread_from)
     
     @property
     def constructor(self):
@@ -90,13 +95,19 @@ class YieldCurveModel(NameClass):
                 kwargs['interpolation_methods'] = self._interpolation_methods
             if self._daycount_type:
                 kwargs['_daycount_type'] = self._daycount_type
-            self._curve = YieldCurve(
+            if self._spread_from:
+                curve_obj = SpreadCurve
+                kwargs['_base_curve'] = self.spread_from
+            else:
+                curve_obj = RateCurve
+            self._curve = curve_obj(
                 date,
                 [(k, 1) for k in self.knots],
                 _calendar = self.constructor._calendar,
                 name=f"{self.constructor.name}-{self.name}",
                 **kwargs
             )
+            update_rate_curve(self._curve.name, self._curve)
             if self.vol_curve:
                 self.set_convexity()
         else:
@@ -111,11 +122,11 @@ class YieldCurveModel(NameClass):
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
         if isinstance(instrument, FXSwapC):
             return instrument.get_pv(self.curve, ref_discount_curve=self.collateral_curve, spot=self.collateral_spot)
-        elif self != self.constructor.models[0]:
+        elif self._collateral_curve:
             if isinstance(instrument, DomesticSwap):
-                return instrument.get_pv(forward_curve=self.curve, discount_curve=self.constructor.models[0].curve)
+                return instrument.get_pv(forward_curve=self.curve, discount_curve=self.collateral_curve)
             elif isinstance(instrument, BasisSwap):
-                return instrument.get_pv(leg1_forward_curve=self.curve, leg2_forward_curve=self.constructor.models[0].curve)
+                return instrument.get_pv(leg1_forward_curve=self.curve, leg2_forward_curve=self.collateral_curve)
             else:
                 return instrument.get_pv(self.curve)
         else:
@@ -134,7 +145,7 @@ class YieldCurveModel(NameClass):
         return
     
     def calibrate_convexity(self, last_fixed_vol_date: dtm.date = None) -> None:
-        self.constructor.build()
+        self.constructor.build_simple()
 
         if last_fixed_vol_date is None:
             last_fixed_vol_date = self.constructor.date
@@ -145,7 +156,7 @@ class YieldCurveModel(NameClass):
                     sw_crv_diff = fut_implied_par - sw_ins.fix_rate
                 elif isinstance(sw_ins, BasisSwap):
                     fut_implied_par = sw_ins.get_par(leg1_forward_curve=self.curve,
-                                                     leg2_forward_curve=self.constructor.models[0].curve)
+                                                     leg2_forward_curve=self.collateral_curve)
                     sw_crv_diff = fut_implied_par - sw_ins.spread
                 last_fixed_vol = self.vol_curve.get_vol(last_fixed_vol_date)
                 logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.price}')
@@ -168,8 +179,8 @@ class YieldCurveModel(NameClass):
 
 
 @dataclass
-class YieldCurveGroupModel(NameDateClass):
-    _models: list[YieldCurveModel]
+class RateCurveGroupModel(NameDateClass):
+    _models: list[RateCurveModel]
     _calendar: str = ''
 
     def __post_init__(self):
@@ -177,11 +188,11 @@ class YieldCurveGroupModel(NameDateClass):
             crv_mod._constructor = self
     
     @property
-    def models(self) -> list[YieldCurveModel]:
+    def models(self) -> list[RateCurveModel]:
         return self._models
     
     @property
-    def curves(self) -> list[YieldCurve]:
+    def curves(self) -> list[RateCurve]:
         return [crv_mod.curve for crv_mod in self.models]
     
     def get_bootstrap_knots(self) -> list[dtm.date]:
@@ -273,7 +284,7 @@ class YieldCurveGroupModel(NameDateClass):
         self.set_nodes(res.x)
         return True
     
-    def build(self) -> bool:
+    def build_simple(self) -> bool:
         for crv_mod in self.models:
             crv_mod.reset(self.date)
         # return self.build_solver()
@@ -283,6 +294,12 @@ class YieldCurveGroupModel(NameDateClass):
         for con in self.models:
             con.calibrate_convexity(last_fixed_vol_date=last_fixed_vol_date)
         return
+    
+    def build(self, calibrate_convexity: bool = False) -> bool:
+        if calibrate_convexity:
+            return self.calibrate_convexity()
+        else:
+            return self.build_simple()
     
     def get_calibration_summary(self) -> list[pd.DataFrame]:
         return pd.concat([con.get_calibration_summary() for con in self.models])
@@ -302,4 +319,8 @@ class YieldCurveGroupModel(NameDateClass):
             node_zrates[yc.name] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates
 
-RATE_CURVE_MAP: dict[str, YieldCurve] = {}
+RATE_CURVE_MAP: dict[str, RateCurve] = {}
+def update_rate_curve(name: str, curve: RateCurve) -> None:
+    RATE_CURVE_MAP[name] = curve
+def get_rate_curve(name: str):
+    return RATE_CURVE_MAP[name]

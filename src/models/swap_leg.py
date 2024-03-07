@@ -7,7 +7,7 @@ import datetime as dtm
 
 from common.chrono import Tenor
 from models.swap_convention import SwapLegConvention, SwapFloatLegConvention
-from models.rate_curve import YieldCurve
+from models.rate_curve import RateCurve
 
 
 @dataclass
@@ -57,7 +57,7 @@ class SwapLeg:
     def get_pv(self) -> float:
         """Get PV for Swap Leg"""
 
-    def get_annuity(self, discount_curve: YieldCurve) -> float:
+    def get_annuity(self, discount_curve: RateCurve) -> float:
         annuity = 0
         accrual_start_date = self.start_date
         for cp_i in range(len(self.coupon_dates)):
@@ -75,7 +75,7 @@ class SwapFixLeg(SwapLeg):
         super().set_market(date)
         self._rate = rate
 
-    def get_pv(self, discount_curve: YieldCurve) -> float:
+    def get_pv(self, discount_curve: RateCurve) -> float:
         pv = 0
         if self.notional_exchange.initial:
             pv += self.notional * discount_curve.get_df(self.start_date)
@@ -120,7 +120,7 @@ class SwapFloatLeg(SwapLeg):
                     (accrual_dates[f_id-1], accrual_dates[f_id])))
         self.fixing_periods = fixing_periods
 
-    def get_pv(self, discount_curve: YieldCurve, forward_curve: YieldCurve = None) -> float:
+    def get_pv(self, discount_curve: RateCurve, forward_curve: RateCurve = None) -> float:
         if not forward_curve:
             forward_curve = discount_curve
         pv = 0
