@@ -37,9 +37,16 @@ CFETS_SWAPS_CODEMAP = {
     'FR007': 72,
 }
 def load_swaps(fixing_type: str = 'FR007') -> tuple[dtm.date, dict[str, float]]:
-    content_json = request.get_json(request.url_get(CFETS_SWAPS_URL,
-                                                    params={'cfgItemType': CFETS_SWAPS_CODEMAP[fixing_type]},
-                                                    headers={'User-Agent': 'Mozilla'}))
+    while (True):
+        try:
+            content = request.url_get(CFETS_SWAPS_URL,
+                                      params={'cfgItemType': CFETS_SWAPS_CODEMAP[fixing_type]},
+                                      headers={'User-Agent': 'Mozilla'})
+            break
+        except:
+            # Open https://www.chinamoney.com.cn/english/bmkycvfcc/ in your web browser and continue
+            pass
+    content_json = request.get_json(content)
     content_metadata = content_json["data"]
     data_date = dtm.datetime.strptime(content_metadata["showDateCN"], CFETS_DATE_FORMAT).date()
     content_data = content_json["records"]
