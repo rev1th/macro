@@ -4,6 +4,7 @@ import logging
 import common.chrono as date_lib
 from models.bond import Bill, Bond
 import data_api.treasury as td
+from rate_curve_builder import get_rate_curve
 
 logger = logging.Logger(__name__)
 
@@ -15,6 +16,10 @@ def construct():
     bills_all = []
     for _, b_r in bond_prices.iterrows():
         if b_r['TYPE'] == 'BILL':
+            # bond_obj = Bond(b_r['MATURITY_DATE'], 0, date_lib.Frequency.SemiAnnual,
+            #                 _daycount_type = date_lib.DayCount.ACT365,
+            #                 _settle_delay=date_lib.Tenor.bday(1),
+            #                 name=b_r['CUSIP'])
             bill_obj = Bill(b_r['MATURITY_DATE'], name=b_r['CUSIP'], _settle_delay=date_lib.Tenor.bday(1))
             bill_obj.set_market(val_dt, b_r['EOD'])
             bills_all.append(bill_obj)
@@ -29,9 +34,10 @@ def construct():
     
 def get_graph_info(bonds: list[Bond], bills: list[Bill]):
     bond_yields = {}
+    curve = get_rate_curve('USD-OIS')
     for b_obj in bonds:
         if b_obj.settle_date < b_obj.maturity_date:
-            bond_yields[b_obj.maturity_date] = [b_obj.get_yield(), f"{b_obj.name} {b_obj.coupon:.2%}"]
+            bond_yields[b_obj.maturity_date] = [b_obj.get_zspread(curve), f"{b_obj.name} {b_obj.coupon:.2%}"]
     bill_yields = {}
     for b_obj in bills:
         if b_obj.settle_date < b_obj.maturity_date:

@@ -7,7 +7,7 @@ import bisect
 import logging
 import numpy as np
 
-from common.chrono import DayCount, get_bdate_series
+from common.chrono import DayCount, get_bdate_series, Compounding
 from common.model import NameDateClass
 
 from lib.interpolator import Interpolator
@@ -52,7 +52,7 @@ class RateCurve(NameDateClass):
                 args.append(self._daycount_type.get_unit_dcf())
             elif im == 'FlatRateBD':
                 bdates = get_bdate_series(self._interpolation_dates[-2], self._interpolation_dates[-1], self._calendar)
-                cached_dcfs = [self.get_dcf_d(d) for d in bdates]
+                cached_dcfs = [self.get_val_dcf(d) for d in bdates]
                 args.append(cached_dcfs)
             interp_cls = Interpolator.fromString(im)
             self._interpolator_classes.append((interp_cls, *args))
@@ -74,7 +74,7 @@ class RateCurve(NameDateClass):
         for id, ic in enumerate(self._interpolator_classes):
             cto_d = self._interpolation_dates[id]
             cto_d_next = self._interpolation_dates[id+1]
-            knots = [(self.get_dcf_d(nd.date), nd.value) for nd in nodes if cto_d <= nd.date and nd.date <= cto_d_next]
+            knots = [(self.get_val_dcf(nd.date), nd.value) for nd in nodes if cto_d <= nd.date and nd.date <= cto_d_next]
             if reset or not hasattr(self._interpolators[id][1], 'update'):
                 self._interpolators[id] = (cto_d_next, ic[0](knots, *ic[1:]))
             else:
@@ -117,7 +117,7 @@ class RateCurve(NameDateClass):
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
         return self._daycount_type.get_dcf(from_date, to_date)
 
-    def get_dcf_d(self, to_date: dtm.date) -> float:
+    def get_val_dcf(self, to_date: dtm.date) -> float:
         return self.get_dcf(self.date, to_date)
 
     def get_df(self, date: dtm.date) -> float:
@@ -127,7 +127,7 @@ class RateCurve(NameDateClass):
         
         for ctd, interpolator in self._interpolators:
             if not ctd or date < ctd:
-                return interpolator.get_value(self.get_dcf_d(date))
+                return interpolator.get_value(self.get_val_dcf(date))
         raise Exception("Unreachable code")
 
     def get_forward_rate(self, from_date: dtm.date, to_date: dtm.date) -> float:
@@ -154,16 +154,11 @@ class RateCurve(NameDateClass):
         else:
             return self.get_forward_rate(from_date, to_date)
     
-    def get_zero_rate(self, date: dtm.date) -> float:
+    def get_spot_rate(self, date: dtm.date, compounding: Compounding = Compounding.Daily) -> float:
         assert date > self.date, f"{date} should be after valuation date {self.date}"
-        try:
-            df = self.get_df(date)
-            dcf_unit = self._daycount_type.get_unit_dcf()
-            return (df ** (-dcf_unit / self.get_dcf_d(date)) - 1) / dcf_unit
-            return -np.log(df) / self.get_dcf_d(date)
-        except Exception as e:
-            logger.critical(f"Failed to find zero rate for {date} {e}")
-            return None
+        df = self.get_df(date)
+        dcf = self.get_val_dcf(date)
+        return compounding.get_rate(df, dcf, dcf_unit=self._daycount_type.get_unit_dcf())
 
 @dataclass
 class SpreadCurve(RateCurve):

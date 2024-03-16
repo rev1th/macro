@@ -314,7 +314,7 @@ class RateCurveGroupModel(NameDateClass):
             for id, dt in enumerate(bdates[:-1]):
                 fwd_rates_i[dt] = yc.get_forward_rate(dt, bdates[id+1])
             for nd in yc._nodes:
-                node_zrates_i[nd.date] = yc.get_zero_rate(nd.date)
+                node_zrates_i[nd.date] = yc.get_spot_rate(nd.date)
             fwd_rates[yc.name] = pd.Series(fwd_rates_i)
             node_zrates[yc.name] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates

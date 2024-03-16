@@ -7,7 +7,8 @@ from enum import StrEnum
 
 from lib import solver
 from models.abstract_instrument import BaseInstrument
-from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType
+from models.rate_curve import RateCurve
+from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType, Compounding
 
 
 BOND_PAR = 100
@@ -26,7 +27,7 @@ class YieldType(StrEnum):
 class BondGeneric(BaseInstrument):
     _maturity_date: dtm.date
     _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT360)
-    _yield_compound_frequency: Frequency = field(kw_only=True, default=Frequency.SemiAnnual)
+    _yield_compounding: Compounding = field(kw_only=True, default=Compounding.SemiAnnual)
     _settle_delay: Tenor = field(kw_only=True, default_factory=Tenor.bday)
 
     _price: float = field(init=False, default=None)
@@ -39,6 +40,10 @@ class BondGeneric(BaseInstrument):
         return self._maturity_date
     
     @property
+    def yield_compounding(self):
+        return self._yield_compounding
+    
+    @property
     def price(self) -> float:
         return self._price
     
@@ -49,9 +54,6 @@ class BondGeneric(BaseInstrument):
     def __lt__(self, other) -> bool:
         return self.maturity_date < other.maturity_date
     
-    def get_yield_dcf(self) -> float:
-        return self._yield_compound_frequency.get_unit_dcf()
-    
     def set_market(self, date: dtm.date, price: float) -> None:
         # assert date <= self.maturity_date, "Value date cannot be after maturity date"
         super().set_market(date)
@@ -60,6 +62,12 @@ class BondGeneric(BaseInstrument):
     
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
         return self._daycount_type.get_dcf(from_date, to_date)
+
+    def get_settle_dcf(self, date: dtm.date) -> float:
+        return self._daycount_type.get_dcf(self.settle_date, date)
+    
+    def get_yield_dcf(self) -> float:
+        return Frequency(self._yield_compounding.value).get_unit_dcf()
 
     def get_yield(self, _: YieldType) -> float:
         """Gives Yield of instrument"""
@@ -73,25 +81,34 @@ class BondGeneric(BaseInstrument):
     def get_dv01(self) -> float:
         """Gives DV01 of instrument"""
 
+    def _rate_from_curve(self, date: dtm.date, curve: RateCurve) -> float:
+        return self._yield_compounding.get_rate(curve.get_df(date), self.get_settle_dcf(date))
+
+    def get_zspread(self) -> float:
+        """Gives Z-Spread of instrument"""
+
 @dataclass
 class Bill(BondGeneric):
 
     def get_yield(self, yield_type: YieldType = YieldType.DEFAULT) -> float:
         match yield_type:
             case YieldType.YTM | YieldType.DEFAULT:
-                yc_dcf = self.get_yield_dcf()
-                return ((BOND_PAR / self.price) ** (yc_dcf / self.get_dcf(self.settle_date, self.maturity_date)) - 1) / yc_dcf
+                return self._yield_compounding.get_rate(self.price / BOND_PAR, self.get_settle_dcf(self.maturity_date))
             case YieldType.DISCOUNT:
-                return (1 - self.price / BOND_PAR) / self.get_dcf(self.settle_date, self.maturity_date)
+                return (1 - self.price / BOND_PAR) / self.get_settle_dcf(self.maturity_date)
 
     def get_macaulay_duration(self) -> float:
-        return self.get_dcf(self.settle_date, self.maturity_date)
+        return self.get_settle_dcf(self.maturity_date)
     
     def get_modified_duration(self) -> float:
-        return self.get_dcf(self.settle_date, self.maturity_date) / (1 + self.get_yield() * self.get_yield_dcf())
+        return self.get_settle_dcf(self.maturity_date) / (1 + self.get_yield() * self.get_yield_dcf())
 
     def get_dv01(self) -> float:
         return self.price * self.get_modified_duration() * 1e-4
+
+    def get_zspread(self, curve: RateCurve) -> float:
+        spot_rate = self._yield_compounding.get_rate(curve.get_df(self.maturity_date), self.get_dcf(self.maturity_date))
+        return self.get_yield() - spot_rate
 
 @dataclass
 class Bond(BondGeneric):
@@ -117,12 +134,6 @@ class Bond(BondGeneric):
     def get_coupon_dcf(self) -> float:
         return self._coupon_frequency.get_unit_dcf()
     
-    def get_yield_dcf(self) -> float:
-        if self._yield_compound_frequency:
-            return self._yield_compound_frequency.get_unit_dcf()
-        else:
-            return self._coupon_frequency.get_unit_dcf()
-    
     def get_acrrued_interest(self) -> float:
         c_d_real = (self.settle_date - self.coupon_dates[0]).days / (self.coupon_dates[1] - self.coupon_dates[0]).days
         return self.coupon * self.get_coupon_dcf() * c_d_real
@@ -130,7 +141,7 @@ class Bond(BondGeneric):
     def get_price_from_yield(self, yld: float) -> float:
         c_dcf = self.get_coupon_dcf()
         yc_dcf = self.get_yield_dcf()
-        yc0_dcf = self.get_dcf(self.settle_date, self.coupon_dates[1])
+        yc0_dcf = self.get_settle_dcf(self.coupon_dates[1])
         df = 1 / (1 + yld * yc_dcf) ** (yc0_dcf / yc_dcf)
         pv = self.coupon * c_dcf * df
         for _ in range(2, len(self.coupon_dates)):
@@ -143,26 +154,22 @@ class Bond(BondGeneric):
 
     def get_yield(self, _: YieldType = YieldType.DEFAULT) -> float:
         return solver.find_root(
-            self._yield_error,
+            lambda yld : self.price - self.get_price_from_yield(yld),
             init_guess=self.coupon, f_prime=self._yield_prime,
         )
     
     def _yield_prime(self, yld: float, macaulay: bool = False) -> float:
         c_dcf = self.get_coupon_dcf()
         yc_dcf = self.get_yield_dcf()
-        yc0_dcf = self.get_dcf(self.settle_date, self.coupon_dates[1])
-        df = 1 / (1 + yld * yc_dcf) ** (yc0_dcf / yc_dcf)
-        dcf = yc0_dcf
-        pv_y = self.coupon * c_dcf * df * dcf
+        cd_dcf = self.get_settle_dcf(self.coupon_dates[1])
+        df = 1 / (1 + yld * yc_dcf) ** (cd_dcf / yc_dcf)
+        pv_y = self.coupon * c_dcf * df * cd_dcf
         for _ in range(2, len(self.coupon_dates)):
             df /= (1 + yld * yc_dcf) ** (c_dcf / yc_dcf)
-            dcf += c_dcf
-            pv_y += self.coupon * c_dcf * df * dcf
-        pv_y += df * dcf
+            cd_dcf += c_dcf
+            pv_y += self.coupon * c_dcf * df * cd_dcf
+        pv_y += df * cd_dcf
         return pv_y * BOND_PAR / (1 if macaulay else (1 + yld * yc_dcf))
-    
-    def _yield_error(self, yld: float) -> float:
-        return self.price - self.get_price_from_yield(yld)
 
     def get_macaulay_duration(self) -> float:
         return self._yield_prime(self.get_yield(), macaulay=True) / self.price
@@ -172,3 +179,29 @@ class Bond(BondGeneric):
 
     def get_dv01(self) -> float:
         return self._yield_prime(self.get_yield()) * 1e-4
+
+    def get_zspread(self, curve: RateCurve) -> float:
+        return solver.find_root(
+            lambda spread, curve : self.price - self.get_price_from_zspread(spread, curve),
+            init_guess=0, f_prime=self._yield_prime,
+            args=(curve)
+        )
+
+    def get_price_from_zspread(self, spread: float, curve: RateCurve) -> float:
+        c_dcf = self.get_coupon_dcf()
+        yc_dcf = self.get_yield_dcf()
+        cd_i = self.coupon_dates[1]
+        cd_dcf = self.get_settle_dcf(cd_i)
+        rate = self._yield_compounding.get_rate(curve.get_df(cd_i), cd_dcf)
+        df = 1 / (1 + (rate + spread) * yc_dcf) ** (cd_dcf / yc_dcf)
+        pv = self.coupon * c_dcf * df
+        for cd_id in range(2, len(self.coupon_dates)):
+            cd_i = self.coupon_dates[cd_id]
+            cd_dcf += c_dcf
+            rate = self._yield_compounding.get_rate(curve.get_df(cd_i), self.get_settle_dcf(cd_i))
+            df = 1 / (1 + (rate + spread) * yc_dcf) ** (cd_dcf / yc_dcf)
+            pv += self.coupon * c_dcf * df
+        pv += df
+        if self.price_type == BondPriceType.CLEAN:
+            pv -= self.get_acrrued_interest()
+        return pv * BOND_PAR

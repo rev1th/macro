@@ -19,6 +19,6 @@ def evaluate():
 
 
 if __name__ == '__main__':
-    # plotter.display_bond_curves(*us_bonds.get_graph_info(*us_bonds.construct()))
     for ycg in evaluate():
         plotter.display_rate_curves(*ycg.get_graph_info())
+    plotter.display_bond_curves(*us_bonds.get_graph_info(*us_bonds.construct()))
