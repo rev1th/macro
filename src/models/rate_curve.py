@@ -169,3 +169,8 @@ class SpreadCurve(RateCurve):
     
     def get_df(self, date: dtm.date) -> float:
         return self._base_curve.get_df(date) * super().get_df(date)
+
+    def get_spread_rate(self, date: dtm.date, compounding: Compounding = Compounding.Daily) -> float:
+        df = self.get_spread_df(date)
+        dcf = self.get_val_dcf(date)
+        return compounding.get_rate(df, dcf, dcf_unit=self._daycount_type.get_unit_dcf())

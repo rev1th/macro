@@ -281,7 +281,7 @@ class RateCurveGroupModel(NameDateClass):
         res = solver.find_fit(cost_f=self.get_solver_error,
                               init_guess=init_guess,
                               jacobian=self.get_jacobian)
-        self.set_nodes(res.x)
+        self.set_nodes(res)
         return True
     
     def build_simple(self) -> bool:
