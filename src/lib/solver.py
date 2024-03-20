@@ -40,4 +40,7 @@ def find_fit(cost_f, init_guess: list[float], jacobian=None) -> list[float]:
             x0=init_guess,
             jac=jacobian,
         )
+    logger.error(f"Optimization iter: {solver.nit}, fev: {solver.nfev}, jev: {solver.njev}")
+    if not solver.success:
+        logger.error(f"Failed to minimize: {solver.message}")
     return solver.x

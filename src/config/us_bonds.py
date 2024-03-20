@@ -44,19 +44,23 @@ def get_graph_info(bonds: list[Bond], bills: list[Bill]):
     bond_measures = {}
     curve = get_rate_curve('USD-OIS')
     # bcm = BondCurveModelNS(bonds[0].value_date, 'USD-OIS', bonds, _decay_rate=1/12)
-    bcm = BondCurveModelNP(bonds[0].value_date, 'USD-OIS', bonds)
+    bcm = BondCurveModelNP(bonds[0].value_date, 'USD-OIS', bills + bonds,  ['6M', '2Y', '5Y', '10Y', '30Y'])
     bcm.build()
     bond_curve = bcm.spread_curve
-    for b_obj in bonds:
-        date = b_obj.maturity_date
-        bond_measures[b_obj.maturity_date] = [
-            # bond_curve.get_rate(b_obj),
-            # b_obj._yield_compounding.get_rate(bond_curve.get_spread_df(date), b_obj.get_settle_dcf(date)),
+    for bnd in bonds:
+        date = bnd.maturity_date
+        bond_measures[date] = [
+            # bond_curve.get_rate(bnd),
+            # bnd._yield_compounding.get_rate(bond_curve.get_spread_df(date), bnd.get_settle_dcf(date)),
             bond_curve.get_spread_rate(date),
-            b_obj.get_zspread(curve),
-            f"{b_obj.name} {b_obj.coupon:.2%}",
+            bnd.get_zspread(curve),
+            f"{bnd.name} {bnd.coupon:.2%}",
         ]
-    bill_measures = {}
-    # for b_obj in bills:
-    #     bill_yields[b_obj.maturity_date] = [b_obj.get_yield(), b_obj.name]
-    return bond_measures, bill_measures, ['Bond Curve Spread', 'Zspread']
+    for bill in bills:
+        date = bill.maturity_date
+        bond_measures[date] = [
+            bond_curve.get_spread_rate(date),
+            bill.get_zspread(curve),
+            bill.name
+        ]
+    return bond_measures, None, ['Bond Curve Spread', 'Zspread']

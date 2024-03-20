@@ -27,14 +27,13 @@ def get_rate_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_n
 def display_rate_curves(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]) -> None:
     get_rate_curve_figure(fwd_curves, node_points).show()
 
-def display_bond_curves(bond_data: dict[str, any], bill_data: dict[str, any] = None, col_names: list[str] = ['Yield']) -> None:
+def display_bond_curves(bond_data: dict[str, any], bond_data2: dict[str, any] = None, col_names: list[str] = ['Yield']) -> None:
     x_name = 'Maturity'
     y_name = 'Yield'
     t_name = 'Name'
-    bond_df = pd.DataFrame.from_dict(bond_data, orient='Index', columns=col_names + [t_name])
-    bill_df = pd.DataFrame.from_dict(bill_data, orient='Index', columns=col_names + [t_name]) if bill_data else None
-    plotter.plot_series(bond_df, data2=bill_df, title='Bond Curve',
-                        y_col=y_name, text_col=t_name,
+    bond_df = pd.DataFrame.from_dict(bond_data, orient='Index', columns=col_names + [t_name]).sort_index()
+    bond_df2 = pd.DataFrame.from_dict(bond_data2, orient='Index', columns=col_names + [t_name]) if bond_data2 else None
+    plotter.plot_series(bond_df, data2=bond_df2, title='Bond Curve', text_col=t_name,
                         x_name=x_name, x_format='%d-%b-%y',
                         y_name=y_name, y_format=',.4%',
                         y2_name=y_name, y2_format=',.4%')

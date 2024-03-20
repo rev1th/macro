@@ -10,7 +10,7 @@ from common.model import NameDateClass
 from common.chrono import Tenor
 from lib import solver
 from models.rate_curve import SpreadCurve, RateCurveNode
-from models.bond import Bond
+from models.bond import BondGeneric
 from rate_curve_builder import get_rate_curve
 
 logger = logging.Logger(__name__)
@@ -20,7 +20,7 @@ logger = logging.Logger(__name__)
 class BondCurveModel(NameDateClass):
 
     _base_curve: str
-    _bonds: list[Bond]
+    _bonds: list[BondGeneric]
     
     @property
     def base_curve(self):
@@ -42,8 +42,8 @@ class BondCurveNS(NameDateClass):
     _coeffs: tuple[float, float, float]
     _decay_rate: float
 
-    def get_rate(self, ins: Bond) -> float:
-        dcf = ins.get_settle_dcf(ins.maturity_date)
+    def get_rate(self, bond: BondGeneric) -> float:
+        dcf = bond.get_settle_dcf(bond.maturity_date)
         decay_rate = self._decay_rate
         decay_factor = np.exp(-self._decay_rate * dcf)
         slope_factor = (1 - decay_factor) / (decay_rate * dcf)
@@ -78,7 +78,7 @@ class BondCurveModelNS(BondCurveModel):
 # Non-parametric
 @dataclass
 class BondCurveModelNP(BondCurveModel):
-    node_tenors: InitVar[list[str]] = ['1Y', '2Y', '5Y', '10Y', '30Y']
+    node_tenors: list[str]
 
     spread_curve: ClassVar[SpreadCurve]
 
