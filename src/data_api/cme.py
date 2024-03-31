@@ -61,8 +61,9 @@ FUTPRODCODE_MAP = {
     'FF': '41',
 }
 FUT_SETTLE_URL = 'https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/Settlements/{code}/FUT?tradeDate={date}'
-def load_fut_settle_prices(code: str = 'SR1'):
-    settle_date = load_fut_data_dates(code=code)[0]
+def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None):
+    if not settle_date:
+        settle_date = load_fut_data_dates(code=code)[0]
     fut_settle_url = FUT_SETTLE_URL.format(code=FUTPRODID_MAP[code], date=settle_date.strftime(DATE_FORMAT))
     content_json = request.get_json(request.url_get(fut_settle_url, headers=HEADERS))
     # settle_date = content_json["tradeDate"]

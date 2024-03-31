@@ -6,12 +6,13 @@ import datetime as dtm
 
 from common.model import NameClass
 from common.currency import Currency
+from common.chrono import Calendar
 
 @dataclass
 class BaseInstrument(NameClass):
     _: KW_ONLY
     _currency: Currency = Currency.USD
-    _calendar: str = 'US-NY'
+    _calendar: Calendar = Calendar.USEX
     _value_date: dtm.date = field(init=False, default=None)
 
     @property

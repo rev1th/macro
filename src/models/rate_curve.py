@@ -7,7 +7,7 @@ import bisect
 import logging
 import numpy as np
 
-from common.chrono import DayCount, get_bdate_series, Compounding
+from common.chrono import DayCount, get_bdate_series, Compounding, Calendar
 from common.model import NameDateClass
 
 from lib.interpolator import Interpolator
@@ -34,7 +34,7 @@ class RateCurve(NameDateClass):
     interpolation_methods: InitVar[list[tuple[Optional[Union[dtm.date, int]], str]]] = [(None, 'Default')]
 
     _daycount_type: DayCount = DayCount.ACT360
-    _calendar: str = ''
+    _calendar: Optional[Calendar] = None
 
     _nodes: ClassVar[list[RateCurveNode]]
     _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]
@@ -75,7 +75,7 @@ class RateCurve(NameDateClass):
             cto_d = self._interpolation_dates[id]
             cto_d_next = self._interpolation_dates[id+1]
             knots = [(self.get_val_dcf(nd.date), nd.value) for nd in nodes if cto_d <= nd.date and nd.date <= cto_d_next]
-            if reset or not hasattr(self._interpolators[id][1], 'update'):
+            if reset:
                 self._interpolators[id] = (cto_d_next, ic[0](knots, *ic[1:]))
             else:
                 self._interpolators[id][1].update(knots)

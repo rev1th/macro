@@ -20,7 +20,6 @@ class BondPriceType(StrEnum):
 class YieldType(StrEnum):
     YTM = 'ytm'
     DISCOUNT = 'discount'
-    DEFAULT = 'default'
 
 @dataclass(frozen=True)
 class CashFlow:
@@ -103,9 +102,9 @@ class Bill(BondGeneric):
         super().set_market(date, price)
         self.cashflows = [CashFlow(self._maturity_date, 1)]
 
-    def get_yield(self, yield_type: YieldType = YieldType.DEFAULT) -> float:
+    def get_yield(self, yield_type: YieldType = None) -> float:
         match yield_type:
-            case YieldType.YTM | YieldType.DEFAULT:
+            case YieldType.YTM | None:
                 return self._yield_compounding.get_rate(self.price / FACE_VALUE, self.get_settle_dcf(self.maturity_date))
             case YieldType.DISCOUNT:
                 return (1 - self.price / FACE_VALUE) / self.get_settle_dcf(self.maturity_date)
@@ -145,7 +144,7 @@ class Bond(BondGeneric):
         super().set_market(date, price)
 
         coupon_dates = self._coupon_frequency.generate_schedule(
-            self.value_date, self.maturity_date,
+            self.settle_date, self.maturity_date,
             bd_adjust=BDayAdjust(BDayAdjustType.Previous, self.calendar), extended=True)
         c_dcf = self.get_coupon_dcf()
         self.cashflows = [CashFlow(cd_i, self.coupon * c_dcf) for cd_i in coupon_dates[1:]]
@@ -173,7 +172,7 @@ class Bond(BondGeneric):
             pv -= self.acrrued_interest
         return pv * FACE_VALUE
 
-    def get_yield(self, _: YieldType = YieldType.DEFAULT) -> float:
+    def get_yield(self, _: YieldType = None) -> float:
         return solver.find_root(
             lambda yld : self.price - self.get_price_from_yield(yld),
             init_guess=self.coupon, f_prime=self._yield_prime,

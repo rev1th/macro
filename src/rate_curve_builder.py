@@ -9,7 +9,7 @@ import pandas as pd
 
 from lib import solver
 from common.model import NameClass, NameDateClass
-from common.chrono import DayCount, get_bdate_series
+from common.chrono import DayCount, get_bdate_series, Calendar
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
 from models.swap import DomesticSwap, BasisSwap, SwapCommonC
@@ -144,13 +144,12 @@ class RateCurveModel(NameClass):
                 f_ins.set_convexity(self.vol_curve)
         return
     
-    def calibrate_convexity(self, last_fixed_vol_date: dtm.date = None) -> None:
+    def calibrate_convexity(self, node_vol_date: dtm.date = None) -> None:
         self.constructor.build_simple()
-
-        if last_fixed_vol_date is None:
-            last_fixed_vol_date = self.constructor.date
+        if node_vol_date is None:
+            node_vol_date = self.constructor.date
         for sw_ins in self.instruments:
-            if isinstance(sw_ins, SwapCommonC) and sw_ins.exclude_knot and sw_ins.end_date > last_fixed_vol_date:
+            if isinstance(sw_ins, SwapCommonC) and sw_ins.exclude_knot and sw_ins.end_date > node_vol_date:
                 if isinstance(sw_ins, DomesticSwap):
                     fut_implied_par = sw_ins.get_par(self.curve)
                     sw_crv_diff = fut_implied_par - sw_ins.fix_rate
@@ -158,30 +157,30 @@ class RateCurveModel(NameClass):
                     fut_implied_par = sw_ins.get_par(leg1_forward_curve=self.curve,
                                                      leg2_forward_curve=self.collateral_curve)
                     sw_crv_diff = fut_implied_par - sw_ins.spread
-                last_fixed_vol = self.vol_curve.get_vol(last_fixed_vol_date)
+                node_vol = self.vol_curve.get_node(node_vol_date)
                 logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.price}')
-                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and last_fixed_vol > 0:
-                    sw_dcf_1 = self.curve.get_dcf(self.curve.date, last_fixed_vol_date)
+                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and node_vol > 0:
+                    sw_dcf_1 = self.curve.get_dcf(self.curve.date, node_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
                     pv01_unit = abs(sw_ins.get_pv01(self.curve) * 10000 / sw_ins.notional)
                     var_offset = np.log(1 + sw_crv_diff * pv01_unit / self.curve.get_df(sw_ins.end_date)) *\
                                     12 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
                     # var_offset = sw_crv_diff * 12 * sw_dcf_2 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
-                    var_adjusted = np.square(last_fixed_vol) + var_offset
+                    var_adjusted = np.square(node_vol) + var_offset
                     vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
-                    logger.critical(f'Rate Vol Adjusted {sw_ins.end_date} {vol_adjusted}')
-                    self.vol_curve.update_node(last_fixed_vol_date, vol_adjusted)
-                    return self.calibrate_convexity(last_fixed_vol_date)
+                    logger.critical(f'Rate Vol Adjusted for {sw_ins.end_date} = {vol_adjusted}')
+                    self.vol_curve.update_node(node_vol_date, vol_adjusted)
+                    return self.calibrate_convexity(node_vol_date)
                 else:
-                    last_fixed_vol_date = sw_ins.end_date
-                    self.vol_curve.add_node(last_fixed_vol_date, last_fixed_vol)
+                    node_vol_date = sw_ins.end_date
+                    self.vol_curve.add_node(node_vol_date, node_vol)
         return
 
 
 @dataclass
 class RateCurveGroupModel(NameDateClass):
     _models: list[RateCurveModel]
-    _calendar: str = ''
+    _calendar: Optional[Calendar] = None
 
     def __post_init__(self):
         for crv_mod in self._models:
@@ -290,9 +289,9 @@ class RateCurveGroupModel(NameDateClass):
         # return self.build_solver()
         return self.build_bootstrap()
     
-    def calibrate_convexity(self, last_fixed_vol_date: dtm.date = None) -> None:
+    def calibrate_convexity(self, node_vol_date: dtm.date = None) -> None:
         for con in self.models:
-            con.calibrate_convexity(last_fixed_vol_date=last_fixed_vol_date)
+            con.calibrate_convexity(node_vol_date=node_vol_date)
         return
     
     def build(self, calibrate_convexity: bool = False) -> bool:

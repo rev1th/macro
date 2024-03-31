@@ -35,8 +35,8 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     elif contract_type == 'FF':
         codes = ['FF']
     for code in codes:
-        fut_settle_data = data_cme.load_fut_settle_prices(code)
-        assert fut_settle_data[0] == val_date, "Valuation date and market data mismatch"
+        fut_settle_data = data_cme.load_fut_settle_prices(code, val_date)
+        # assert fut_settle_data[0] == val_date, "Valuation date and market data mismatch"
         futures_prices.update(fut_settle_data[1])
     for ins in fut_instruments:
         if ins.name in futures_prices:
@@ -86,8 +86,8 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
 
 
 def construct():
-    us_cal = 'US-NY'
-    val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=us_cal)
+    us_cal = date_lib.Calendar.USEX
+    val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=us_cal.value)
 
     sofr_rates = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
     ff_rates = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')
@@ -104,7 +104,7 @@ def construct():
     for k, v in data_parser.read_swap_conventions().items():
         add_swap_convention(*k, v)
     
-    next_btenor = date_lib.Tenor(('1B', us_cal))
+    next_btenor = date_lib.Tenor.bday(1, us_cal)
     meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)
 
     # SOFR - OIS

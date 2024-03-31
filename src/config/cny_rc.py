@@ -83,4 +83,4 @@ def construct():
         RateCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7DR'),
         RateCurveModel(cny_swaps_2, _daycount_type=date_lib.DayCount.ACT360, _collateral_curve='CNY-7DR', name='SHIBOR'),
     ]
-    return RateCurveGroupModel(val_date, curve_defs, _calendar='CN', name='CNY')
+    return RateCurveGroupModel(val_date, curve_defs, _calendar=date_lib.Calendar.CNY, name='CNY')

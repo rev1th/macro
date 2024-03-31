@@ -35,12 +35,18 @@ class VolCurve(NameDateClass):
         self._interpolator = self._interpolator_class(knots)
     
     def update_node(self, date: dtm.date, value: float) -> None:
-        for i, node in enumerate(self._nodes):
+        for ni, node in enumerate(self._nodes):
             if node.date == date:
-                self._nodes[i] = DataPoint(date, value)
+                self._nodes[ni] = DataPoint(date, value)
                 self._set_interpolator()
                 return
         raise Exception(f"Invalid date {date} to set node")
+    
+    def get_node(self, date: dtm.date) -> float:
+        for node in self._nodes:
+            if node.date == date:
+                return node.value
+        raise Exception(f"Invalid date {date} to get node")
     
     def add_node(self, date: dtm.date, value: float) -> None:
         self._nodes.append(DataPoint(date, value))

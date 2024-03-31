@@ -21,7 +21,7 @@ class RateFuture(Future):
     _convexity: ClassVar[float] = None
     
     @property
-    def rate_start_date(self) -> dtm.date:
+    def rate_start_date(self):
         return self._rate_start
     
     @property
@@ -36,13 +36,13 @@ class RateFuture(Future):
         return get_fixing(Fixing(self.underlying), date)
     
     def set_convexity(self, rate_vol_curve: VolCurve, daycount_type: DayCount = DayCount.ACT360) -> None:
-        if self.rate_start_date <= self.value_date:
+        if self._rate_start <= self.value_date:
             self._convexity = 0
             return
         mrr = 0.03
         vol = rate_vol_curve.get_vol(self.settle_date)
         dcf_v_s = daycount_type.get_dcf(self.value_date, self.settle_date)
-        dcf_rs_re = daycount_type.get_dcf(self.rate_start_date, self.rate_end_date)
+        dcf_rs_re = daycount_type.get_dcf(self._rate_start, self.rate_end_date)
         beta_rs_re = (1 - np.exp(-mrr * dcf_rs_re)) / mrr
         convex_unit = vol * vol / 2 * beta_rs_re * dcf_v_s * (dcf_v_s - dcf_rs_re)
         self._convexity = (100 - self.price + 100 / dcf_rs_re) * (1 - np.exp(-convex_unit))
@@ -81,7 +81,7 @@ class RateFutureSerial(RateFutureC):
         # first day of next expiry month
         self._rate_end = Tenor('1BOM').get_date(self.expiry)
 
-        bdates = get_bdate_series(self.rate_start_date, self.rate_end_date, self.currency.value)
+        bdates = get_bdate_series(self.rate_start_date, self.rate_end_date, self.calendar)
         if bdates[-1] < self.rate_end_date:
             bdates.append(self.rate_end_date)
         self.fixing_dates = bdates

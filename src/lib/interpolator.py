@@ -50,15 +50,14 @@ class FlatRate(Interpolator):
     
     def get_value(self, x: float) -> float:
         super()._get_value(x)
-
-        for i in range(1, len(self._ys)):
-            if x == self._xs[i]:
-                return self._ys[i]
-            elif x < self._xs[i]:
-                dc_unit = self._dc_unit
-                step_rate = ((self._ys[i] / self._ys[i-1]) ** (-dc_unit / (self._xs[i] - self._xs[i-1])) - 1) / dc_unit
-                return self._ys[i-1] * ((1 + step_rate * dc_unit) ** (-(x - self._xs[i-1]) / dc_unit))
-        raise Exception("Out of node bounds for flat rate")
+        if x > self._xs[-1]:
+            raise Exception("Out of node bounds for flat rate")
+        ih = bisect.bisect_left(self._xs, x)
+        if x == self._xs[ih]:
+            return self._ys[ih]
+        dc_unit = self._dc_unit
+        step_rate = ((self._ys[ih] / self._ys[ih-1]) ** (-dc_unit / (self._xs[ih] - self._xs[ih-1])) - 1) / dc_unit
+        return self._ys[ih-1] * ((1 + step_rate * dc_unit) ** (-(x - self._xs[ih-1]) / dc_unit))
 
 
 @dataclass
@@ -118,24 +117,24 @@ class FlatRateBD(Interpolator):
     
     def get_value(self, x: float) -> float:
         super()._get_value(x)
-
-        for i in range(1, len(self._ys)):
-            if x == self._xs[i]:
-                return self._ys[i]
-            elif x < self._xs[i]:
-                step_key = ((self._xs[i-1], self._ys[i-1]), (self._xs[i], self._ys[i]))
-                if step_key in self._cached_step_rate:
-                    step_rate = self._cached_step_rate[step_key]
-                else:
-                    df_period = self._ys[i] / self._ys[i-1]
-                    step_rate = self._eval_period_rate(df_period, from_x=self._xs[i-1], to_x=self._xs[i])
-                    self._cached_step_rate[step_key] = step_rate
-                return self._ys[i-1] * self._step_df(step_rate, self._xs[i-1], x)
-        raise Exception("Out of node bounds for flat rate")
+        if x > self._xs[-1]:
+            raise Exception("Out of node bounds for flat rate")
+        ih = bisect.bisect_left(self._xs, x)
+        if x == self._xs[ih]:
+            return self._ys[ih]
+        step_key = ((self._xs[ih-1], self._ys[ih-1]), (self._xs[ih], self._ys[ih]))
+        if step_key in self._cached_step_rate:
+            step_rate = self._cached_step_rate[step_key]
+        else:
+            df_period = self._ys[ih] / self._ys[ih-1]
+            step_rate = self._eval_period_rate(df_period, from_x=self._xs[ih-1], to_x=self._xs[ih])
+            self._cached_step_rate[step_key] = step_rate
+        return self._ys[ih-1] * self._step_df(step_rate, self._xs[ih-1], x)
 
 
 @dataclass
 class MonotoneConvex(Interpolator):
+    _eps: float = 1e-4
 
     def __post_init__(self, xy_init):
         super().__post_init__(xy_init)
@@ -150,13 +149,12 @@ class MonotoneConvex(Interpolator):
 
     def get_value(self, x: float):
         super()._get_value(x)
-        
-        if x in self._xs:
-            return self._ys[self._xs.index(x)]
-        elif x > self._xs[-1]:
-            f_x = -np.log(self._ys[-1] / self.get_value(self._xs[-1]-1))
+        if x > self._xs[-1]:
+            f_x = -np.log(self._ys[-1] / self.get_value(self._xs[-1]-self._eps))
             return self._ys[-1] * np.exp(-f_x * (x-self._xs[-1]))
         ih = bisect.bisect_left(self._xs, x)
+        if x == self._xs[ih]:
+            return self._ys[ih]
         dx = (x-self._xs[ih-1]) / (self._xs[ih]-self._xs[ih-1])
         gi = self.fs[ih] - self.fds[ih]
         gi_1 = self.fs[ih-1] - self.fds[ih]
