@@ -145,14 +145,15 @@ class Bond(BondGeneric):
 
         coupon_dates = self._coupon_frequency.generate_schedule(
             self.settle_date, self.maturity_date,
-            bd_adjust=BDayAdjust(BDayAdjustType.Previous, self.calendar), extended=True)
+            bd_adjust=BDayAdjust(BDayAdjustType.ModifiedFollowing, self.calendar), extended=True)
         c_dcf = self.get_coupon_dcf()
         self.cashflows = [CashFlow(cd_i, self.coupon * c_dcf) for cd_i in coupon_dates[1:]]
+        # Add Notional
         self.cashflows[-1] = CashFlow(self.cashflows[-1].date, self.cashflows[-1].amount+1)
         
         if self.settle_date > coupon_dates[0]:
-            accrued_ratio = (self.settle_date - coupon_dates[0]).days / (coupon_dates[1] - coupon_dates[0]).days
-            self.acrrued_interest = self.cashflows[0].amount * accrued_ratio
+            accrued_fraction = (self.settle_date - coupon_dates[0]).days / (coupon_dates[1] - coupon_dates[0]).days
+            self.acrrued_interest = self.coupon * c_dcf * accrued_fraction
         else:
             self.acrrued_interest = 0
     
