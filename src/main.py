@@ -8,7 +8,7 @@ logger = logging.Logger('')
 logger.setLevel(logging.DEBUG)
 
 
-def evaluate():
+def evaluate_rates():
     ycg_usd = usd_rc.construct()
     ycg_usd.build(calibrate_convexity=True)
 
@@ -17,8 +17,14 @@ def evaluate():
 
     return [ycg_usd, ycg_cny]
 
+def evaluate_bonds():
+    bcm_us = us_bonds.construct()
+    bcm_us.build()
+    return [bcm_us]
+
 
 if __name__ == '__main__':
-    for ycg in evaluate():
-        plotter.display_rate_curves(*ycg.get_graph_info())
-    plotter.display_bond_curves(*us_bonds.get_graph_info(*us_bonds.construct()))
+    for ycg in evaluate_rates():
+        plotter.display_rates_curve(*ycg.get_graph_info())
+    for bcm in evaluate_bonds():
+        plotter.display_bonds_curve(*bcm.get_graph_info())

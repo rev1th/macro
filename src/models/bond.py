@@ -28,9 +28,9 @@ class CashFlow:
 
 
 @dataclass
-class BondGeneric(BaseInstrument):
+class Bond(BaseInstrument):
     _maturity_date: dtm.date
-    _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT360)
+    _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT365)
     _yield_compounding: Compounding = field(kw_only=True, default=Compounding.SemiAnnual)
     _settle_delay: Tenor = field(kw_only=True, default_factory=Tenor.bday)
 
@@ -56,6 +56,9 @@ class BondGeneric(BaseInstrument):
     def price_type(self):
         return self._price_type
     
+    def display_name(self):
+        return self.name
+    
     def __lt__(self, other) -> bool:
         return self.maturity_date < other.maturity_date
     
@@ -67,13 +70,19 @@ class BondGeneric(BaseInstrument):
     
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
         return self._daycount_type.get_dcf(from_date, to_date)
-
+    
     def get_settle_dcf(self, date: dtm.date) -> float:
         return self._daycount_type.get_dcf(self.settle_date, date)
     
     def get_yield_dcf(self) -> float:
         return Frequency(self._yield_compounding.value).get_unit_dcf()
-
+    
+    def get_full_price(self) -> float:
+        return self._price
+    
+    def _rate_from_curve(self, date: dtm.date, curve: RateCurve) -> float:
+        return self._yield_compounding.get_rate(curve.get_df(date) / curve.get_df(self.settle_date), self.get_settle_dcf(date))
+    
     def get_yield(self, _: YieldType) -> float:
         """Gives Yield of instrument"""
     
@@ -85,47 +94,58 @@ class BondGeneric(BaseInstrument):
     
     def get_dv01(self) -> float:
         """Gives DV01 of instrument"""
-
-    def _rate_from_curve(self, date: dtm.date, curve: RateCurve) -> float:
-        return self._yield_compounding.get_rate(curve.get_df(date), self.get_settle_dcf(date))
-
+    
     def get_zspread(self) -> float:
         """Gives Z-Spread of instrument"""
-
+    
     def get_price_from_curve(self, _: RateCurve) -> float:
-        """Gives Price fom Bond curve"""
+        """Gives Price from Bond curve"""
+    
+    def copy(self):
+        """Creates a copy of Bond"""
+    
+    def roll_date(self, date: dtm.date):
+        cls = self.copy()
+        cls.set_market(date, None)
+        return cls
 
 @dataclass
-class Bill(BondGeneric):
+class ZeroCouponBond(Bond):
 
     def set_market(self, date: dtm.date, price: float) -> None:
         super().set_market(date, price)
         self.cashflows = [CashFlow(self._maturity_date, 1)]
-
+    
+    def copy(self):
+        return ZeroCouponBond(self._maturity_date, name=self.name,
+                            _daycount_type=self._daycount_type,
+                            _yield_compounding=self._yield_compounding,
+                            _settle_delay=self._settle_delay)
+    
     def get_yield(self, yield_type: YieldType = None) -> float:
         match yield_type:
             case YieldType.YTM | None:
                 return self._yield_compounding.get_rate(self.price / FACE_VALUE, self.get_settle_dcf(self.maturity_date))
             case YieldType.DISCOUNT:
                 return (1 - self.price / FACE_VALUE) / self.get_settle_dcf(self.maturity_date)
-
+    
     def get_macaulay_duration(self) -> float:
         return self.get_settle_dcf(self.maturity_date)
     
     def get_modified_duration(self) -> float:
         return self.get_settle_dcf(self.maturity_date) / (1 + self.get_yield() * self.get_yield_dcf())
-
+    
     def get_dv01(self) -> float:
         return self.price * self.get_modified_duration() * 1e-4
-
+    
     def get_zspread(self, curve: RateCurve) -> float:
         return self.get_yield() - self._rate_from_curve(self.maturity_date, curve)
     
     def get_price_from_curve(self, curve: RateCurve) -> float:
-        return FACE_VALUE * curve.get_df(self.maturity_date)
+        return FACE_VALUE * curve.get_df(self.maturity_date) / curve.get_df(self.settle_date)
 
 @dataclass
-class Bond(BondGeneric):
+class FixCouponBond(Bond):
     _coupon: float
     _coupon_frequency: Frequency
 
@@ -139,6 +159,9 @@ class Bond(BondGeneric):
     @property
     def coupon_frequency(self):
         return self._coupon_frequency
+    
+    def display_name(self):
+        return f"{self.name} {self._coupon:.2%}"
     
     def set_market(self, date: dtm.date, price: float) -> None:
         super().set_market(date, price)
@@ -157,8 +180,20 @@ class Bond(BondGeneric):
         else:
             self.acrrued_interest = 0
     
+    def copy(self):
+        return FixCouponBond(self._maturity_date, self._coupon, self._coupon_frequency,
+                            name=self.name, _daycount_type=self._daycount_type,
+                            _yield_compounding=self._yield_compounding,
+                            _settle_delay=self._settle_delay)
+    
     def get_coupon_dcf(self) -> float:
         return self._coupon_frequency.get_unit_dcf()
+    
+    def get_full_price(self) -> float:
+        if self.price_type == BondPriceType.CLEAN:
+            return self._price + self.acrrued_interest
+        else:
+            return self._price
     
     def get_price_from_yield(self, yld: float) -> float:
         c_dcf = self.get_coupon_dcf()
@@ -172,7 +207,7 @@ class Bond(BondGeneric):
         if self.price_type == BondPriceType.CLEAN:
             pv -= self.acrrued_interest
         return pv * FACE_VALUE
-
+    
     def get_yield(self, _: YieldType = None) -> float:
         return solver.find_root(
             lambda yld : self.price - self.get_price_from_yield(yld),
@@ -190,23 +225,23 @@ class Bond(BondGeneric):
             cd_dcf += c_dcf
             pv_y += cshf.amount * df * cd_dcf
         return pv_y * FACE_VALUE / (1 if macaulay else (1 + yld * yc_dcf))
-
+    
     def get_macaulay_duration(self) -> float:
         return self._yield_prime(self.get_yield(), macaulay=True) / self.price
-
+    
     def get_modified_duration(self) -> float:
         return self._yield_prime(self.get_yield()) / self.price
-
+    
     def get_dv01(self) -> float:
         return self._yield_prime(self.get_yield()) * 1e-4
-
+    
     def get_zspread(self, curve: RateCurve) -> float:
         return solver.find_root(
             lambda spread, curve : self.price - self.get_price_from_zspread(spread, curve),
             init_guess=0, f_prime=self._yield_prime,
             args=(curve)
         )
-
+    
     def get_price_from_zspread(self, spread: float, curve: RateCurve) -> float:
         c_dcf = self.get_coupon_dcf()
         yc_dcf = self.get_yield_dcf()
@@ -224,11 +259,12 @@ class Bond(BondGeneric):
         if self.price_type == BondPriceType.CLEAN:
             pv -= self.acrrued_interest
         return pv * FACE_VALUE
-
+    
     def get_price_from_curve(self, curve: RateCurve) -> float:
         pv = 0
+        settle_df = curve.get_df(self.settle_date)
         for cshf in self.cashflows:
-            pv += cshf.amount * curve.get_df(cshf.date)
+            pv += cshf.amount * curve.get_df(cshf.date) / settle_df
         if self.price_type == BondPriceType.CLEAN:
             pv -= self.acrrued_interest
         return pv * FACE_VALUE

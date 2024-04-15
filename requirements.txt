@@ -5,5 +5,5 @@ pydantic==2.1.*
 sortedcontainers==2.4.*
 pandas==2.0.*
 plotly==5.16.*
-dash==2.14.*
+dash==2.15.*
 ./../common/dist/common-1.0-py3-none-any.whl

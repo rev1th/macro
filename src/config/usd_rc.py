@@ -72,7 +72,7 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
         return None
     mdt_i = 0
     for ins in fut_instruments:
-        if ins.expiry > step_dates[mdt_i]:
+        if ins.expiry > step_dates[mdt_i] and not ins.exclude_knot:
             mdt_i += 1
             if mdt_i >= len(step_dates):
                 logger.info('Step dates end.')
@@ -114,26 +114,32 @@ def construct():
     fut_cutoff = date_lib.Tenor('30m').get_date(val_dt)
     fut_instruments = imms + serials
     # Skip futures on expiry date, we only use fixing rates till T
-    fut_instruments = [fi for fi in fut_instruments if deposit.end_date < fi.expiry <= fut_cutoff]
+    fut_instruments = [fi for fi in fut_instruments if deposit.end_date < fi.expiry]
+    for fi in fut_instruments:
+        if fi.expiry > fut_cutoff:
+            fi.exclude_knot = True
     fut_instruments.sort()
     mdt_sc = set_step_knots(fut_instruments, meeting_dates_eff)
 
     futs_crv = get_futures_for_curve(fut_instruments, val_dt, contract_type='SOFR')
     usd_rate_vol = 1.4/100
-    rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='OIS-Vol')
+    rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='SOFR-Vol')
     swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff)
     curve_instruments = [deposit] + futs_crv + swaps
     curve_defs = [RateCurveModel(curve_instruments,
                                   _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
                                   _rate_vol_curve=rate_vol_curve,
-                                  name='OIS')]
+                                  name='SOFR')]
 
     # Fed fund
     ff_deposit = Deposit(next_btenor, name='EFFR')
     ff_deposit.set_market(val_dt, ff_rates.get_last_value())
 
     ff_fut_cutoff = date_lib.Tenor('13m').get_date(val_dt)
-    ff_futs = [fi for fi in ff_serials if ff_deposit.end_date < fi.expiry <= ff_fut_cutoff]
+    ff_futs = [fi for fi in ff_serials if ff_deposit.end_date < fi.expiry]
+    for fi in ff_futs:
+        if fi.expiry > ff_fut_cutoff:
+            fi.exclude_knot = True
     ff_mdt_sc = set_step_knots(ff_futs, meeting_dates_eff)
     
     ff_futs_crv = get_futures_for_curve(ff_futs, val_dt, contract_type='FF')
@@ -143,8 +149,8 @@ def construct():
     curve_defs.append(RateCurveModel(ff_curve_instruments,
                                       _interpolation_methods = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')],
                                       _rate_vol_curve=ff_rate_vol_curve,
-                                      _collateral_curve='USD-OIS',
-                                      _spread_from='USD-OIS',
+                                      _collateral_curve='USD-SOFR',
+                                      _spread_from='USD-SOFR',
                                       name='FF'))
     
     return RateCurveGroupModel(val_dt, curve_defs, _calendar=us_cal, name='USD')

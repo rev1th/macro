@@ -1,16 +1,17 @@
 
 from pydantic.dataclasses import dataclass
-from dataclasses import InitVar
 from typing import ClassVar
 import logging
 import numpy as np
 import statsmodels.api as sm
+import pandas as pd
+import datetime as dtm
 
 from common.model import NameDateClass
 from common.chrono import Tenor
 from lib import solver
-from models.rate_curve import SpreadCurve, RateCurveNode
-from models.bond import BondGeneric
+from models.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
+from models.bond import Bond
 from rate_curve_builder import get_rate_curve
 
 logger = logging.Logger(__name__)
@@ -20,7 +21,7 @@ logger = logging.Logger(__name__)
 class BondCurveModel(NameDateClass):
 
     _base_curve: str
-    _bonds: list[BondGeneric]
+    _bonds: list[Bond]
     
     @property
     def base_curve(self):
@@ -32,6 +33,23 @@ class BondCurveModel(NameDateClass):
     
     def build(self) -> True:
         """Builds bond curve"""
+    
+    def get_measures(self, date: dtm.date = None) -> pd.DataFrame:
+        measures = []
+        if date:
+            rolled_curve = RollForwardCurve(self.spread_curve, date)
+        for bnd in sorted(self._bonds):
+            if date:
+                if date < bnd.maturity_date:
+                    bnd = bnd.roll_date(date)
+                    if bnd.settle_date < bnd.maturity_date:
+                        bnd._price = bnd.get_price_from_curve(rolled_curve)
+                    else:
+                        continue
+                else:
+                    continue
+            measures.append((bnd.display_name(), bnd.maturity_date, bnd.price, bnd.get_full_price(), bnd.get_yield()))
+        return pd.DataFrame(measures, columns=['Name', 'Maturity', 'Market Price', 'Full Price', 'Yield'])
 
 
 # Nelson Seigel method
@@ -42,7 +60,7 @@ class BondCurveNS(NameDateClass):
     _coeffs: tuple[float, float, float]
     _decay_rate: float
 
-    def get_rate(self, bond: BondGeneric) -> float:
+    def get_rate(self, bond: Bond) -> float:
         dcf = bond.get_settle_dcf(bond.maturity_date)
         decay_rate = self._decay_rate
         decay_factor = np.exp(-self._decay_rate * dcf)
@@ -130,5 +148,30 @@ class BondCurveModelNP(BondCurveModel):
         self.spread_curve = SpreadCurve(base_date, nodes, base_curve,
                                         interpolation_methods=[(None, 'LogLinear')],
                                         _daycount_type=base_curve._daycount_type,
-                                        _calendar=base_curve._calendar)
+                                        _calendar=base_curve._calendar,
+                                        name=base_curve.name)
+        update_bond_curve(self.spread_curve)
         return self.build_solver()
+    
+    def get_graph_info(self):
+        bond_measures = []
+        curve = get_rate_curve(self._base_curve)
+        for bnd in self.bonds:
+            date = bnd.maturity_date
+            bond_measures.append([
+                date,
+                # bnd._yield_compounding.get_rate(bond_curve.get_spread_df(date), bnd.get_settle_dcf(date)),
+                self.spread_curve.get_spread_rate(date, bnd._yield_compounding),
+                bnd.get_zspread(curve),
+                bnd.display_name(),
+            ])
+        bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Curve Spread', 'Zspread', 'Name'])
+        bond_df.set_index('Maturity', inplace=True)
+        bond_df.sort_index(inplace=True)
+        return bond_df, None
+
+BOND_CURVE_MAP: dict[str, SpreadCurve] = {}
+def update_bond_curve(curve: SpreadCurve) -> None:
+    BOND_CURVE_MAP[curve.name] = curve
+def get_bond_curve(name: str):
+    return BOND_CURVE_MAP[name]

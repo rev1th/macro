@@ -174,3 +174,36 @@ class SpreadCurve(RateCurve):
         df = self.get_spread_df(date)
         dcf = self.get_val_dcf(date)
         return compounding.get_rate(df, dcf, dcf_unit=self._daycount_type.get_unit_dcf())
+
+@dataclass
+class RollCurve:
+    _base_curve: RateCurve
+    _roll_date: dtm.date
+
+    def __post_init__(self):
+        assert self._base_curve.date <= self._roll_date, "Roll date should be after base curve valuation date"
+    
+    def get_df(self, _: dtm.date) -> float:
+        """Gives discount factor from Rolled curve"""
+
+@dataclass
+class RollForwardCurve(RollCurve):
+    _roll_df: ClassVar[float]
+
+    def __post_init__(self):
+        super().__post_init__()
+        self._roll_df = self._base_curve.get_df(self._roll_date)
+    
+    def get_df(self, date: dtm.date) -> float:
+        return self._base_curve.get_df(date) / self._roll_df
+
+@dataclass
+class RollSpotCurve(RollCurve):
+    _date_delta: ClassVar[dtm.timedelta]
+
+    def __post_init__(self):
+        super().__post_init__()
+        self._date_delta = self._roll_date - self._base_curve.date
+    
+    def get_df(self, date: dtm.date) -> float:
+        return self._base_curve.get_df(date - self._date_delta)

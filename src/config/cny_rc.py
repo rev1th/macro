@@ -77,7 +77,7 @@ def construct():
             fxfwd_instruments,
             _interpolation_methods = [('CNY_1M', 'LogLinear'), (None, 'LogCubic')], # MonotoneConvex
             _daycount_type=date_lib.DayCount.ACT365,
-            _collateral_curve='USD-OIS',
+            _collateral_curve='USD-SOFR',
             _collateral_spot=spot_instrument,
             name='OIS'),
         RateCurveModel(cny_swaps_1, _daycount_type=date_lib.DayCount.ACT365, name='7DR'),

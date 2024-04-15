@@ -107,7 +107,7 @@ class RateCurveModel(NameClass):
                 name=f"{self.constructor.name}-{self.name}",
                 **kwargs
             )
-            update_rate_curve(self._curve.name, self._curve)
+            update_rate_curve(self._curve)
             if self.vol_curve:
                 self.set_convexity()
         else:
@@ -115,9 +115,9 @@ class RateCurveModel(NameClass):
     
     def get_calibration_summary(self) -> pd.DataFrame:
         return pd.DataFrame(
-            [(ins.name, ins.knot, ins.price, self.get_instrument_pv(ins)) for ins in self.instruments],
-            columns=['Name', 'Date', 'Price', 'Error']
-            )
+            [(self.name, ins.name, ins.end_date, ins.price, ins.knot, self.get_instrument_pv(ins)) for ins in self.instruments],
+            columns=['Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
+        )
     
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
         if isinstance(instrument, FXSwapC):
@@ -319,7 +319,7 @@ class RateCurveGroupModel(NameDateClass):
         return fwd_rates, node_zrates
 
 RATE_CURVE_MAP: dict[str, RateCurve] = {}
-def update_rate_curve(name: str, curve: RateCurve) -> None:
-    RATE_CURVE_MAP[name] = curve
+def update_rate_curve(curve: RateCurve) -> None:
+    RATE_CURVE_MAP[curve.name] = curve
 def get_rate_curve(name: str):
     return RATE_CURVE_MAP[name]
