@@ -31,8 +31,18 @@ FUTPRODID_MAP = {
     'SR3': 8462,
     'SR1': 8463,
     'FF': 305,
+
+    'ZT': '303',    #1 9/12 - 2, <=5 3/12
+    # 'Z3N': '2666',  #2 9/12 - 3, <=7
+    'ZF': '329',    #>=4 2/12, <=5 3/12
+    'ZN': '316',    #6 1/2 - 7 3/4
+    'TN': '7978',   #9 5/12 - 10
+    'ZB': '307',    #15 - 25
+    # 'TWE': '10072', #19 2/12 - 19 11/12
+    'UB': '3141',   #>=25
 }
 FUTPROD_COLUMNS = ['productCode', 'contractMonth', 'firstTrade', 'lastTrade', 'settlement']
+# ['firstPosition', 'lastPosition', 'firstNotice', 'firstDelivery', 'lastDelivery']
 def load_futures_list(code: str):
     fut_url = FUTPROD_URL.format(code=FUTPRODID_MAP[code])
     content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
@@ -56,14 +66,23 @@ def load_fut_data_dates(code: str = 'SR1') -> list[dtm.date]:
     return settle_dates
 
 FUTPRODCODE_MAP = {
-    'SR3': 'SR3',
-    'SR1': 'SR1',
     'FF': '41',
+
+    'ZT': '26',
+    'ZF': '25',
+    'ZN': '21',
+    'ZB': '17',
+    'UB': 'UBE',
 }
 FUT_SETTLE_URL = 'https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/Settlements/{code}/FUT?tradeDate={date}'
 def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None):
+    fut_data_dates = load_fut_data_dates(code=code)
     if not settle_date:
-        settle_date = load_fut_data_dates(code=code)[0]
+        settle_date = fut_data_dates[0]
+    elif settle_date > fut_data_dates[0]:
+        return load_fut_quotes(code)
+    elif settle_date not in fut_data_dates:
+        raise Exception(f"No futures settlement prices found for date {settle_date}")
     fut_settle_url = FUT_SETTLE_URL.format(code=FUTPRODID_MAP[code], date=settle_date.strftime(DATE_FORMAT))
     content_json = request.get_json(request.url_get(fut_settle_url, headers=HEADERS))
     # settle_date = content_json["tradeDate"]
@@ -74,7 +93,7 @@ def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None):
         month_str = settle_i['month']
         if settle_price != '-':
             month_strs = month_str.split(' ')
-            contract_code = FUTPRODCODE_MAP[code] + get_month_code(month_strs[0]) + month_strs[1]
+            contract_code = FUTPRODCODE_MAP.get(code, code) + get_month_code(month_strs[0]) + month_strs[1]
             res[contract_code] = float(settle_price)
     return (settle_date, res)
 
@@ -83,14 +102,17 @@ FUT_QUOTES_URL = 'https://www.cmegroup.com/CmeWS/mvc/Quotes/Future/{code}/G'
 def load_fut_quotes(code: str = 'SR1'):
     fut_url = FUT_QUOTES_URL.format(code=FUTPRODID_MAP[code])
     content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
-    trade_date = dtm.datetime.strptime(content_json["tradeDate"], format='%d %b %Y').date
+    trade_date = dtm.datetime.strptime(content_json["tradeDate"], '%d %b %Y').date()
     quotes = content_json["quotes"]
     res: dict[str, float] = {}
     for quote_i in quotes:
-        last_price = quote_i['priorSettle'] # ['last']
-        contract_month = quote_i['code'] # ['expirationCode']
-        if last_price != '-':
-            res[contract_month] = float(last_price)
+        settle_price = quote_i['priorSettle'] # ['last']
+        expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
+        contract_month = FUTPRODCODE_MAP.get(code, code) + f"{expiry_code[0]}{expiry_month[2:4]}"
+        if settle_price != '-':
+            settle_price = float(settle_price)
+            if settle_price > 0:
+                res[contract_month] = settle_price
     return (trade_date, res)
 
 SWAP_URL = 'https://www.cmegroup.com/services/sofr-strip-rates/'

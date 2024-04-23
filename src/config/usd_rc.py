@@ -36,7 +36,6 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
         codes = ['FF']
     for code in codes:
         fut_settle_data = data_cme.load_fut_settle_prices(code, val_date)
-        # assert fut_settle_data[0] == val_date, "Valuation date and market data mismatch"
         futures_prices.update(fut_settle_data[1])
     for ins in fut_instruments:
         if ins.name in futures_prices:
@@ -85,9 +84,10 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
     return last_knot
 
 
-def construct():
+def construct(val_dt: dtm.date = None):
     us_cal = date_lib.Calendar.USEX
-    val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=us_cal.value)
+    if not val_dt:
+        val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=us_cal.value)
 
     sofr_rates = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
     ff_rates = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')

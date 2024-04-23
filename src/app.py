@@ -18,6 +18,11 @@ app.layout = html.Div([
     html.H3('Macro Analytics App'),
     html.Br(),
     html.Div([
+        dcc.DatePickerSingle(
+            id='val-date-picker',
+            max_date_allowed=dtm.date.today(),
+            clearable=True,
+        ),
         html.Button('Refresh Rates Curves', id='load_rates'),
         dcc.Loading(
             id='rates-curves-loading',
@@ -39,12 +44,14 @@ app.layout = html.Div([
 @callback(
     Output(component_id='rates-curves', component_property='children'),
     Output(component_id='rates-curves-loading', component_property='children'),
+    Input(component_id='val-date-picker', component_property='date'),
     Input(component_id='load_rates', component_property='n_clicks'),
     # running=[(Output(component_id='load_rates', component_property='disabled'), True, False)],
 )
-def load_rates(*_):
+def load_rates(date_str: str, *_):
+    value_date = dtm.date.fromisoformat(date_str) if date_str else None
     r_tabvals = []
-    for ycg in evaluate_rates():
+    for ycg in evaluate_rates(value_date):
         summary_df = ycg.get_calibration_summary()
         fig = plotter.get_rates_curve_figure(*ycg.get_graph_info())
         columns = [dict(id=col, name=col) for col in summary_df.columns]
@@ -61,12 +68,14 @@ def load_rates(*_):
 @callback(
     Output(component_id='bonds-curves', component_property='children'),
     Output(component_id='bonds-curves-loading', component_property='children'),
+    Input(component_id='val-date-picker', component_property='date'),
     Input(component_id='rates-curves', component_property='children'),
     Input(component_id='load_bonds', component_property='n_clicks'),
 )
-def load_bonds(*_):
+def load_bonds(date_str: str, *_):
+    value_date = dtm.date.fromisoformat(date_str) if date_str else None
     b_tabvals = []
-    _CACHED_DATA['bonds-models'] = evaluate_bonds()
+    _CACHED_DATA['bonds-models'] = evaluate_bonds(value_date)
     for bcm in _CACHED_DATA['bonds-models']:
         fig = plotter.get_bonds_curve_figure(*bcm.get_graph_info())
         b_tabvals.append(dcc.Tab(children=[

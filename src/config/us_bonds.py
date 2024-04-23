@@ -13,8 +13,9 @@ MIN_TENOR_BOND = date_lib.Tenor('6m')
 MIN_TENOR_BILL = date_lib.Tenor('1m')
 CUSIP_COL, TYPE_COL, RATE_COL, MATURITY_COL, PRICE_COL = (td.COL_NAMES[id] for id in [0, 1, 2, 3, -1])
 
-def construct():
-    val_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=date_lib.Calendar.USEX)
+def construct(val_date = None):
+    if not val_date:
+        val_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=date_lib.Calendar.USEX)
     min_maturity_bond = MIN_TENOR_BOND.get_date(val_date)
     min_maturity_bill = MIN_TENOR_BILL.get_date(val_date)
     bonds_price = td.load_bonds_price(val_date)

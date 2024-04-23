@@ -8,8 +8,8 @@ logger = logging.Logger('')
 logger.setLevel(logging.DEBUG)
 
 
-def evaluate_rates():
-    ycg_usd = usd_rc.construct()
+def evaluate_rates(value_date = None):
+    ycg_usd = usd_rc.construct(value_date)
     ycg_usd.build(calibrate_convexity=True)
 
     ycg_cny = cny_rc.construct()
@@ -17,8 +17,8 @@ def evaluate_rates():
 
     return [ycg_usd, ycg_cny]
 
-def evaluate_bonds():
-    bcm_us = us_bonds.construct()
+def evaluate_bonds(value_date = None):
+    bcm_us = us_bonds.construct(value_date)
     bcm_us.build()
     return [bcm_us]
 
