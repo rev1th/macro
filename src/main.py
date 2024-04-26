@@ -9,13 +9,16 @@ logger.setLevel(logging.DEBUG)
 
 
 def evaluate_rates(value_date = None):
-    ycg_usd = usd_rc.construct(value_date)
-    ycg_usd.build(calibrate_convexity=True)
+    ycg_usd = []
+    for date in usd_rc.get_valuation_dates(value_date):
+        ycg_usd_dt = usd_rc.construct(date)
+        ycg_usd_dt.build(calibrate_convexity=True)
+        ycg_usd.append(ycg_usd_dt)
 
-    ycg_cny = cny_rc.construct()
-    ycg_cny.build()
+    # ycg_cny = cny_rc.construct()
+    # ycg_cny.build()
 
-    return [ycg_usd, ycg_cny]
+    return [ycg_usd]#, [ycg_cny]]
 
 def evaluate_bonds(value_date = None):
     bcm_us = us_bonds.construct(value_date)

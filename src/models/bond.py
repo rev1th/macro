@@ -161,7 +161,7 @@ class FixCouponBond(Bond):
         return self._coupon_frequency
     
     def display_name(self):
-        return f"{self.name} {self._coupon:.2%}"
+        return f"{self.name} {self._coupon:.3%}"
     
     def set_market(self, date: dtm.date, price: float) -> None:
         super().set_market(date, price)
@@ -244,17 +244,20 @@ class FixCouponBond(Bond):
     
     def get_price_from_zspread(self, spread: float, curve: RateCurve) -> float:
         c_dcf = self.get_coupon_dcf()
-        yc_dcf = self.get_yield_dcf()
+        # yc_dcf = self.get_yield_dcf()
         cd_i = self.cashflows[0].date
         cd_dcf = self.get_settle_dcf(cd_i)
-        rate = self._yield_compounding.get_rate(curve.get_df(cd_i), cd_dcf)
-        df = 1 / (1 + (rate + spread) * yc_dcf) ** (cd_dcf / yc_dcf)
+        settle_df = curve.get_df(self.settle_date)
+        rate = self._yield_compounding.get_rate(curve.get_df(cd_i) / settle_df, cd_dcf)
+        df = self._yield_compounding.get_df(rate + spread, cd_dcf)
+        # rate = self._rate_from_curve(cd_i, curve)
+        # df = 1 / (1 + (rate + spread) * yc_dcf) ** (cd_dcf / yc_dcf)
         pv = self.cashflows[0].amount * df
         for cshf in self.cashflows[1:]:
             cd_i = cshf.date
             cd_dcf += c_dcf
-            rate = self._rate_from_curve(cd_i, curve)
-            df = 1 / (1 + (rate + spread) * yc_dcf) ** (cd_dcf / yc_dcf)
+            rate = self._yield_compounding.get_rate(curve.get_df(cd_i) / settle_df, cd_dcf)
+            df = self._yield_compounding.get_df(rate + spread, cd_dcf)
             pv += cshf.amount * df
         if self.price_type == BondPriceType.CLEAN:
             pv -= self.acrrued_interest
@@ -262,9 +265,9 @@ class FixCouponBond(Bond):
     
     def get_price_from_curve(self, curve: RateCurve) -> float:
         pv = 0
-        settle_df = curve.get_df(self.settle_date)
         for cshf in self.cashflows:
-            pv += cshf.amount * curve.get_df(cshf.date) / settle_df
+            pv += cshf.amount * curve.get_df(cshf.date)
+        pv /= curve.get_df(self.settle_date)
         if self.price_type == BondPriceType.CLEAN:
             pv -= self.acrrued_interest
         return pv * FACE_VALUE

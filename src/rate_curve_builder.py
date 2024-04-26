@@ -33,10 +33,10 @@ class RateCurveModel(NameClass):
     _instruments: list[CurveInstrument]
     _interpolation_methods: list[tuple[Optional[Union[dtm.date, int, str]], str]] = None
     _daycount_type: DayCount = None
-    _collateral_curve: str = None
-    _collateral_spot: FXSpot = None
-    _rate_vol_curve: VolCurve = None
-    _spread_from: str = None
+    _collateral_curve: Optional[str] = None
+    _collateral_spot: Optional[FXSpot] = None
+    _rate_vol_curve: Optional[VolCurve] = None
+    _spread_from: Optional[str] = None
 
     _curve: ClassVar[RateCurve]
     _constructor: ClassVar[NameDateClass]
@@ -48,15 +48,7 @@ class RateCurveModel(NameClass):
     
     @property
     def collateral_curve(self) -> RateCurve:
-        return get_rate_curve(self._collateral_curve)
-    
-    @property
-    def collateral_spot(self):
-        return self._collateral_spot
-    
-    @property
-    def vol_curve(self) -> VolCurve:
-        return self._rate_vol_curve
+        return get_rate_curve(self._collateral_curve, self.date)
     
     @property
     def curve(self) -> RateCurve:
@@ -64,15 +56,15 @@ class RateCurveModel(NameClass):
     
     @property
     def spread_from(self) -> RateCurve:
-        return get_rate_curve(self._spread_from)
-    
-    @property
-    def constructor(self):
-        return self._constructor
+        return get_rate_curve(self._spread_from, self.date)
     
     @property
     def knots(self) -> list[dtm.date]:
         return self._knots
+    
+    @property
+    def date(self) -> dtm.date:
+        return self._constructor.date
     
     def knot_instruments(self) -> list[CurveInstrument]:
         return [inst for inst in self.instruments if inst.knot]
@@ -102,26 +94,27 @@ class RateCurveModel(NameClass):
                 curve_obj = RateCurve
             self._curve = curve_obj(
                 date,
-                [(k, 1) for k in self.knots],
-                _calendar = self.constructor._calendar,
-                name=f"{self.constructor.name}-{self.name}",
+                [(k, 1) for k in self._knots],
+                _calendar = self._constructor._calendar,
+                name=f"{self._constructor.name}-{self.name}",
                 **kwargs
             )
             update_rate_curve(self._curve)
-            if self.vol_curve:
+            if self._rate_vol_curve:
                 self.set_convexity()
         else:
             self._curve = None
     
     def get_calibration_summary(self) -> pd.DataFrame:
         return pd.DataFrame(
-            [(self.name, ins.name, ins.end_date, ins.price, ins.knot, self.get_instrument_pv(ins)) for ins in self.instruments],
-            columns=['Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
+            [(self.date, self.name, ins.name, ins.end_date, ins.price, ins.knot,
+                self.get_instrument_pv(ins)) for ins in self.instruments],
+            columns=['Date', 'Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
         )
     
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
         if isinstance(instrument, FXSwapC):
-            return instrument.get_pv(self.curve, ref_discount_curve=self.collateral_curve, spot=self.collateral_spot)
+            return instrument.get_pv(self.curve, ref_discount_curve=self.collateral_curve, spot=self._collateral_spot)
         elif self._collateral_curve:
             if isinstance(instrument, DomesticSwap):
                 return instrument.get_pv(forward_curve=self.curve, discount_curve=self.collateral_curve)
@@ -141,13 +134,13 @@ class RateCurveModel(NameClass):
     def set_convexity(self) -> None:
         for f_ins in self.instruments:
             if isinstance(f_ins, RateFutureC):
-                f_ins.set_convexity(self.vol_curve)
+                f_ins.set_convexity(self._rate_vol_curve)
         return
     
     def calibrate_convexity(self, node_vol_date: dtm.date = None) -> None:
-        self.constructor.build_simple()
+        self._constructor.build_simple()
         if node_vol_date is None:
-            node_vol_date = self.constructor.date
+            node_vol_date = self.date
         for sw_ins in self.instruments:
             if isinstance(sw_ins, SwapCommonC) and sw_ins.exclude_knot and sw_ins.end_date > node_vol_date:
                 if isinstance(sw_ins, DomesticSwap):
@@ -157,7 +150,7 @@ class RateCurveModel(NameClass):
                     fut_implied_par = sw_ins.get_par(leg1_forward_curve=self.curve,
                                                      leg2_forward_curve=self.collateral_curve)
                     sw_crv_diff = fut_implied_par - sw_ins.spread
-                node_vol = self.vol_curve.get_node(node_vol_date)
+                node_vol = self._rate_vol_curve.get_node(node_vol_date)
                 logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.price}')
                 if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and node_vol > 0:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, node_vol_date)
@@ -169,18 +162,18 @@ class RateCurveModel(NameClass):
                     var_adjusted = np.square(node_vol) + var_offset
                     vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
                     logger.critical(f'Rate Vol Adjusted for {sw_ins.end_date} = {vol_adjusted}')
-                    self.vol_curve.update_node(node_vol_date, vol_adjusted)
+                    self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
                     return self.calibrate_convexity(node_vol_date)
                 else:
                     node_vol_date = sw_ins.end_date
-                    self.vol_curve.add_node(node_vol_date, node_vol)
+                    self._rate_vol_curve.add_node(node_vol_date, node_vol)
         return
 
 
 @dataclass
 class RateCurveGroupModel(NameDateClass):
     _models: list[RateCurveModel]
-    _calendar: Optional[Calendar] = None
+    _calendar: Calendar
 
     def __post_init__(self):
         for crv_mod in self._models:
@@ -314,12 +307,12 @@ class RateCurveGroupModel(NameDateClass):
                 fwd_rates_i[dt] = yc.get_forward_rate(dt, bdates[id+1])
             for nd in yc._nodes:
                 node_zrates_i[nd.date] = yc.get_spot_rate(nd.date)
-            fwd_rates[yc.name] = pd.Series(fwd_rates_i)
-            node_zrates[yc.name] = pd.Series(node_zrates_i)
+            fwd_rates[yc.display_name()] = pd.Series(fwd_rates_i)
+            node_zrates[yc.display_name()] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates
 
-RATE_CURVE_MAP: dict[str, RateCurve] = {}
+RATE_CURVE_MAP: dict[tuple[str, dtm.date], RateCurve] = {}
 def update_rate_curve(curve: RateCurve) -> None:
-    RATE_CURVE_MAP[curve.name] = curve
-def get_rate_curve(name: str):
-    return RATE_CURVE_MAP[name]
+    RATE_CURVE_MAP[(curve.name, curve.date)] = curve
+def get_rate_curve(name: str, date: dtm.date):
+    return RATE_CURVE_MAP[(name, date)]

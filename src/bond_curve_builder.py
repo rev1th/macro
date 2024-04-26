@@ -25,7 +25,7 @@ class BondCurveModel(NameDateClass):
     
     @property
     def base_curve(self):
-        return get_rate_curve(self._base_curve)
+        return get_rate_curve(self._base_curve, self.date)
 
     @property
     def bonds(self):
@@ -39,7 +39,7 @@ class BondCurveModel(NameDateClass):
         if date:
             rolled_curve = RollForwardCurve(self.spread_curve, date)
         for bnd in sorted(self._bonds):
-            if date:
+            if date and date > bnd.value_date:
                 if date < bnd.maturity_date:
                     bnd = bnd.roll_date(date)
                     if bnd.settle_date < bnd.maturity_date:
@@ -155,7 +155,7 @@ class BondCurveModelNP(BondCurveModel):
     
     def get_graph_info(self):
         bond_measures = []
-        curve = get_rate_curve(self._base_curve)
+        curve = get_rate_curve(self._base_curve, self.date)
         for bnd in self.bonds:
             date = bnd.maturity_date
             bond_measures.append([
@@ -165,13 +165,13 @@ class BondCurveModelNP(BondCurveModel):
                 bnd.get_zspread(curve),
                 bnd.display_name(),
             ])
-        bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Curve Spread', 'Zspread', 'Name'])
+        bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Asset Spread', 'ZSpread', 'Name'])
         bond_df.set_index('Maturity', inplace=True)
         bond_df.sort_index(inplace=True)
         return bond_df, None
 
 BOND_CURVE_MAP: dict[str, SpreadCurve] = {}
 def update_bond_curve(curve: SpreadCurve) -> None:
-    BOND_CURVE_MAP[curve.name] = curve
-def get_bond_curve(name: str):
-    return BOND_CURVE_MAP[name]
+    BOND_CURVE_MAP[(curve.name, curve.date)] = curve
+def get_bond_curve(name: str, date: dtm.date):
+    return BOND_CURVE_MAP[(name, date)]

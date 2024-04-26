@@ -39,6 +39,9 @@ class RateCurve(NameDateClass):
     _nodes: ClassVar[list[RateCurveNode]]
     _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]
 
+    def display_name(self) -> str:
+        return f"{self.name}:{self.date.strftime('%d-%b')}"
+    
     def __post_init__(self, nodes_init, interpolation_methods: list[str]):
         assert len(nodes_init) > 0, "Cannot build rate curve without nodes"
         assert nodes_init[0][0] > self.date, f"First node {nodes_init[0][0]} should be after valuation date {self.date}"

@@ -8,7 +8,7 @@ RATE_NAME_2 = 'Zero Rate (%)'
 DATE_FORMAT = '%d-%b-%y'
 
 def get_rates_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_nodes: dict[str, dict[any, float]]):
-    fig = plotter.get_figure(fwd_curves, zero_curves_nodes, title='Yield Curve',
+    fig = plotter.get_figure(fwd_curves, zero_curves_nodes, title='Yield Curve', mode2='lines',
                              x_name='Date', x_format=DATE_FORMAT,
                              y_name=RATE_NAME_1, y_format=RATE_FORMAT,
                              y2_name=RATE_NAME_2, y2_format=RATE_FORMAT)
@@ -32,7 +32,7 @@ def get_bonds_curve_figure(bond_data: pd.DataFrame, bond_data2: pd.DataFrame = N
     y_name = 'Yield'
     t_name = 'Name'
     return plotter.get_figure(
-        bond_data, data2=bond_data2, title='Bond Curve', text_col=t_name,
+        bond_data, data2=bond_data2, title='Bond Curve', text_col=t_name, mode=['lines', 'markers'],
         x_name=x_name, x_format='%d-%b-%y',
         y_name=y_name, y_format=',.4%',
         y2_name=y_name, y2_format=',.4%')

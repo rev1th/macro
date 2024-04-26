@@ -1,6 +1,7 @@
 
 import datetime as dtm
 import logging
+from copy import deepcopy
 
 import common.chrono as date_lib
 from models.fixing import add_fixing_curve
@@ -19,6 +20,20 @@ FIXING_SWAP_MAP = {
     'SOFR':     ('USD_SOFR', DomesticSwap),
     'SOFR_FF':  ('USD_FF_SOFR', BasisSwap),
 }
+CALENDAR = date_lib.Calendar.USEX
+
+_SOFR_RATES = None
+_FF_RATES = None
+_SOFR_IMM_CONTRACTS = None
+_SOFR_SERIAL_CONTRACTS = None
+_FF_SERIAL_CONTRACTS = None
+
+
+def get_valuation_dates(from_date: dtm.date):
+    if not from_date:
+        return [None]
+    last_val_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
+    return date_lib.get_bdate_series(from_date, last_val_date, CALENDAR)
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
     fut_instruments_crv = []
@@ -41,8 +56,9 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
         if ins.name in futures_prices:
             price = futures_prices[ins.name]
             logger.info(f"Setting price for future {ins.name} to {price}")
-            ins.set_market(val_date, price)
-            fut_instruments_crv.append(ins)
+            ins_c = deepcopy(ins)
+            ins_c.set_market(val_date, price)
+            fut_instruments_crv.append(ins_c)
         else:
             logger.warning(f"No price found for future {ins.name}. Skipping")
     return fut_instruments_crv
@@ -83,36 +99,38 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
     logger.warning(f'Setting step cutoff {last_knot}')
     return last_knot
 
-
-def construct(val_dt: dtm.date = None):
-    us_cal = date_lib.Calendar.USEX
-    if not val_dt:
-        val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=us_cal.value)
-
-    sofr_rates = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
-    ff_rates = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')
-    imms = data_parser.read_IMM_futures(filename='SR3.csv', underlying='SOFR', name_col='productCode', 
-                                        expiry_col='lastTrade', settle_col='settlement')
-    serials = data_parser.read_serial_futures(filename='SR1.csv', underlying='SOFR', name_col='productCode', 
-                                              expiry_col='lastTrade', settle_col='settlement')
-    ff_serials = data_parser.read_serial_futures(filename='FF.csv', underlying='EFFR', name_col='productCode',
-                                                 expiry_col='lastTrade', settle_col='settlement')
+def _init():
+    global _SOFR_RATES, _FF_RATES, _SOFR_IMM_CONTRACTS, _SOFR_SERIAL_CONTRACTS, _FF_SERIAL_CONTRACTS
+    _SOFR_RATES = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
+    _FF_RATES = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')
+    _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(filename='SR3.csv', underlying='SOFR', name_col='productCode',
+                                                    expiry_col='lastTrade', settle_col='settlement')
+    _SOFR_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='SR1.csv', underlying='SOFR', name_col='productCode', 
+                                                    expiry_col='lastTrade', settle_col='settlement')
+    _FF_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='FF.csv', underlying='EFFR', name_col='productCode',
+                                                    expiry_col='lastTrade', settle_col='settlement')
     
-    for fc in [sofr_rates, ff_rates]:
+    for fc in [_SOFR_RATES, _FF_RATES]:
         add_fixing_curve(fc)
     
     for k, v in data_parser.read_swap_conventions().items():
         add_swap_convention(*k, v)
+
+
+def construct(val_dt: dtm.date = None):
+    if not val_dt:
+        _init()
+        val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
     
-    next_btenor = date_lib.Tenor.bday(1, us_cal)
+    next_btenor = date_lib.Tenor.bday(1, CALENDAR)
     meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)
 
     # SOFR - OIS
     deposit = Deposit(next_btenor, name='SOFR')  # meeting_dates_eff[0])
-    deposit.set_market(val_dt, sofr_rates.get_last_value())
+    deposit.set_market(val_dt, _SOFR_RATES.get_last_value())
 
     fut_cutoff = date_lib.Tenor('30m').get_date(val_dt)
-    fut_instruments = imms + serials
+    fut_instruments = _SOFR_IMM_CONTRACTS + _SOFR_SERIAL_CONTRACTS
     # Skip futures on expiry date, we only use fixing rates till T
     fut_instruments = [fi for fi in fut_instruments if deposit.end_date < fi.expiry]
     for fi in fut_instruments:
@@ -133,10 +151,10 @@ def construct(val_dt: dtm.date = None):
 
     # Fed fund
     ff_deposit = Deposit(next_btenor, name='EFFR')
-    ff_deposit.set_market(val_dt, ff_rates.get_last_value())
+    ff_deposit.set_market(val_dt, _FF_RATES.get_last_value())
 
     ff_fut_cutoff = date_lib.Tenor('13m').get_date(val_dt)
-    ff_futs = [fi for fi in ff_serials if ff_deposit.end_date < fi.expiry]
+    ff_futs = [fi for fi in _FF_SERIAL_CONTRACTS if ff_deposit.end_date < fi.expiry]
     for fi in ff_futs:
         if fi.expiry > ff_fut_cutoff:
             fi.exclude_knot = True
@@ -153,5 +171,5 @@ def construct(val_dt: dtm.date = None):
                                       _spread_from='USD-SOFR',
                                       name='FF'))
     
-    return RateCurveGroupModel(val_dt, curve_defs, _calendar=us_cal, name='USD')
+    return RateCurveGroupModel(val_dt, curve_defs, _calendar=CALENDAR, name='USD')
 

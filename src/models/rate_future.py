@@ -15,18 +15,10 @@ from models.vol_curve import VolCurve
 
 @dataclass
 class RateFuture(Future):
-    _rate_start: dtm.date
-    _rate_end: dtm.date = None
+    _rate_start_date: dtm.date
+    _rate_end_date: dtm.date = None
 
-    _convexity: ClassVar[float] = None
-    
-    @property
-    def rate_start_date(self):
-        return self._rate_start
-    
-    @property
-    def rate_end_date(self) -> dtm.date:
-        return self._rate_end
+    _convexity: ClassVar[float]
     
     @property
     def convexity(self) -> float:
@@ -36,13 +28,13 @@ class RateFuture(Future):
         return get_fixing(Fixing(self.underlying), date)
     
     def set_convexity(self, rate_vol_curve: VolCurve, daycount_type: DayCount = DayCount.ACT360) -> None:
-        if self._rate_start <= self.value_date:
+        if self._rate_start_date <= self.value_date:
             self._convexity = 0
             return
         mrr = 0.03
         vol = rate_vol_curve.get_vol(self.settle_date)
         dcf_v_s = daycount_type.get_dcf(self.value_date, self.settle_date)
-        dcf_rs_re = daycount_type.get_dcf(self._rate_start, self.rate_end_date)
+        dcf_rs_re = daycount_type.get_dcf(self._rate_start_date, self._rate_end_date)
         beta_rs_re = (1 - np.exp(-mrr * dcf_rs_re)) / mrr
         convex_unit = vol * vol / 2 * beta_rs_re * dcf_v_s * (dcf_v_s - dcf_rs_re)
         self._convexity = (100 - self.price + 100 / dcf_rs_re) * (1 - np.exp(-convex_unit))
@@ -64,26 +56,26 @@ class RateFutureIMM(RateFutureC):
 
     def __post_init__(self):
         super().__post_init__()
-        self._rate_end = self.settle_date
+        self._rate_end_date = self.settle_date
     
     def get_settle_rate(self, curve: RateCurve) -> float:
-        return curve.get_forecast_rate(self.rate_start_date, self.settle_date, Fixing(self.underlying))
+        return curve.get_forecast_rate(self._rate_start_date, self.settle_date, Fixing(self.underlying))
 
 
 @dataclass
 class RateFutureSerial(RateFutureC):
-    _rate_start: dtm.date = field(init=False)
+    _rate_start_date: dtm.date = field(init=False)
 
     def __post_init__(self):
         super().__post_init__()
         # first day of the expiry month
-        self._rate_start = dtm.date(self.expiry.year, self.expiry.month, 1)
+        self._rate_start_date = dtm.date(self.expiry.year, self.expiry.month, 1)
         # first day of next expiry month
-        self._rate_end = Tenor('1BOM').get_date(self.expiry)
+        self._rate_end_date = Tenor('1BOM').get_date(self.expiry)
 
-        bdates = get_bdate_series(self.rate_start_date, self.rate_end_date, self.calendar)
-        if bdates[-1] < self.rate_end_date:
-            bdates.append(self.rate_end_date)
+        bdates = get_bdate_series(self._rate_start_date, self._rate_end_date, self.calendar)
+        if bdates[-1] < self._rate_end_date:
+            bdates.append(self._rate_end_date)
         self.fixing_dates = bdates
     
     def set_market(self, date: dtm.date, price: float) -> None:
@@ -103,5 +95,5 @@ class RateFutureSerial(RateFutureC):
             settle_rate += rate_fix * (date_i_next - date_i).days
             date_i = date_i_next
         
-        settle_rate /= (self.rate_end_date - self.rate_start_date).days
+        settle_rate /= (self._rate_end_date - self._rate_start_date).days
         return settle_rate

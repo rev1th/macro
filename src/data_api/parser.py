@@ -36,7 +36,7 @@ def read_IMM_futures(filename: str,
             underlying,
             _expiry=row[expiry_col],
             _settle=row[settle_col],
-            _rate_start=df_imm.iloc[i-1][settle_col],
+            _rate_start_date=df_imm.iloc[i-1][settle_col],
             name=row[name_col],
         ))
 
