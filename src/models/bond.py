@@ -33,6 +33,7 @@ class Bond(BaseInstrument):
     _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT365)
     _yield_compounding: Compounding = field(kw_only=True, default=Compounding.SemiAnnual)
     _settle_delay: Tenor = field(kw_only=True, default_factory=Tenor.bday)
+    _original_term: float = field(kw_only=True, default=None)
 
     _price: float = field(init=False, default=None)
     _price_type: BondPriceType = field(init=False, default=BondPriceType.CLEAN)
@@ -49,6 +50,10 @@ class Bond(BaseInstrument):
         return self._yield_compounding
     
     @property
+    def original_term(self) -> dtm.date:
+        return self._original_term
+    
+    @property
     def price(self) -> float:
         return self._price
     
@@ -62,10 +67,15 @@ class Bond(BaseInstrument):
     def __lt__(self, other) -> bool:
         return self.maturity_date < other.maturity_date
     
-    def set_market(self, date: dtm.date, price: float) -> None:
+    def set_market(self, date: dtm.date, price: float, trade_date: dtm.date = None) -> None:
         # assert date <= self.maturity_date, "Value date cannot be after maturity date"
-        super().set_market(date)
-        self.settle_date = self._settle_delay.get_date(date, BDayAdjust(BDayAdjustType.Following, self.calendar))
+        if date:
+            super().set_market(date)
+            self.settle_date = date
+        else:
+            super().set_market(trade_date)
+            self.settle_date = self._settle_delay.get_date(trade_date,
+                                    BDayAdjust(BDayAdjustType.Following, self.calendar))
         self._price = price
     
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
@@ -104,16 +114,16 @@ class Bond(BaseInstrument):
     def copy(self):
         """Creates a copy of Bond"""
     
-    def roll_date(self, date: dtm.date):
+    def roll_date(self, date: dtm.date, price: float = None):
         cls = self.copy()
-        cls.set_market(date, None)
+        cls.set_market(date, price)
         return cls
 
 @dataclass
 class ZeroCouponBond(Bond):
-
-    def set_market(self, date: dtm.date, price: float) -> None:
-        super().set_market(date, price)
+    
+    def set_market(self, date: dtm.date, price: float, trade_date: dtm.date = None) -> None:
+        super().set_market(date, price, trade_date)
         self.cashflows = [CashFlow(self._maturity_date, 1)]
     
     def copy(self):
@@ -163,9 +173,9 @@ class FixCouponBond(Bond):
     def display_name(self):
         return f"{self.name} {self._coupon:.3%}"
     
-    def set_market(self, date: dtm.date, price: float) -> None:
-        super().set_market(date, price)
-
+    def set_market(self, date: dtm.date, price: float, trade_date: dtm.date = None) -> None:
+        super().set_market(date, price, trade_date)
+        
         coupon_dates = self._coupon_frequency.generate_schedule(
             self.settle_date, self.maturity_date,
             bd_adjust=BDayAdjust(BDayAdjustType.ModifiedFollowing, self.calendar), extended=True)
@@ -271,3 +281,37 @@ class FixCouponBond(Bond):
         if self.price_type == BondPriceType.CLEAN:
             pv -= self.acrrued_interest
         return pv * FACE_VALUE
+    
+    def get_forward_price(self, date: dtm.date, repo_rate: float) -> float:
+        fwd_bnd = self.roll_date(date)
+        spot_pv = self.price / FACE_VALUE
+        if self.price_type == BondPriceType.CLEAN:
+            spot_pv += self.acrrued_interest
+        fwd_pv = spot_pv * (1 + repo_rate * self.get_settle_dcf(date))
+        for cshf in self.cashflows:
+            if cshf.date >= fwd_bnd.settle_date:
+                fwd_pv -= cshf.amount * (1 + repo_rate * self.get_dcf(cshf.date, date))
+            else:
+                break
+        if self.price_type == BondPriceType.CLEAN:
+            fwd_pv -= fwd_bnd.acrrued_interest
+        return fwd_pv * FACE_VALUE
+    
+    # def get_forward_repo(self, date: dtm.date, price: float) -> float:
+    def get_forward_repo(self, fwd_bond) -> float:
+        # fwd_bnd = self.roll_date(date)
+        spot_pv = self.price / FACE_VALUE
+        fwd_pv = fwd_bond.price / FACE_VALUE
+        if self.price_type == BondPriceType.CLEAN:
+            spot_pv += self.acrrued_interest
+            fwd_pv += fwd_bond.acrrued_interest
+        fwd_dcf = self.get_settle_dcf(fwd_bond.settle_date)
+        realized_cash = 0
+        realized_cash_dcf = 0
+        for cshf in self.cashflows:
+            if cshf.date <= fwd_bond.settle_date:
+                realized_cash += cshf.amount
+                realized_cash_dcf += cshf.amount * self.get_dcf(cshf.date, fwd_bond.settle_date)
+            else:
+                break
+        return (fwd_pv - spot_pv + realized_cash) / (spot_pv * fwd_dcf - realized_cash_dcf)

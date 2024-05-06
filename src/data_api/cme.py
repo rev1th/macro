@@ -5,6 +5,7 @@ import logging
 import argparse
 
 from common import request_web as request, io
+from common.data_model import DataPointType
 
 logger = logging.Logger(__name__)
 
@@ -26,20 +27,52 @@ HEADERS = {
 def get_month_code(month: str) -> str:
     return MONTHMAP[month]
 
+def is_valid_price(price: str):
+    return price != '-' and price[-1] not in ('A', 'B')
+
+def str_to_num(num: str, num_type = float) -> float:
+    return num_type(num.replace(',', ''))
+
+def transform_quote(quote: str, price_params: dict = None):
+    if price_params is None:
+        return float(quote)
+    extra_tick = False
+    if 'extra_tick_count' in price_params:
+        extra_tick, extra_tick_count = True, price_params['extra_tick_count']
+    quote_parts = quote.split('\'')
+    if len(quote_parts) != 2 or len(quote_parts[1]) != (3 if extra_tick else 2):
+        raise RuntimeError(f'Invalid quote format {quote}')
+    quote_p1, quote_p2 = quote_parts
+    quote_p3 = (float(quote_p2[2]) / extra_tick_count) if extra_tick else 0
+    return float(quote_p1) + (float(quote_p2[:2]) + quote_p3) / 32
+
+def get_field(data_dict: dict[str, any], datapoint_type: DataPointType, params: dict = None):
+    match datapoint_type:
+        case DataPointType.LAST:
+            return transform_quote(data_dict['last'], params) if is_valid_price(data_dict['last']) else None
+        case DataPointType.SETTLE:
+            return transform_quote(data_dict['settle'], params) if is_valid_price(data_dict['settle']) else None
+        case DataPointType.VOLUME:
+            return str_to_num(data_dict['volume'], int) if data_dict['volume'] else None
+        case DataPointType.PREV_OI:
+            return str_to_num(data_dict['openInterest'], int) if data_dict['openInterest'] else None
+        case _:
+            logger.error(f'Unhandled {datapoint_type}')
+
 FUTPROD_URL = 'https://www.cmegroup.com/CmeWS/mvc/ProductCalendar/Future/{code}'
 FUTPRODID_MAP = {
     'SR3': 8462,
     'SR1': 8463,
     'FF': 305,
 
-    'ZT': '303',    #1 9/12 - 2, <=5 3/12
+    'ZT': '303',
     # 'Z3N': '2666',  #2 9/12 - 3, <=7
-    'ZF': '329',    #>=4 2/12, <=5 3/12
-    'ZN': '316',    #6 1/2 - 7 3/4
-    'TN': '7978',   #9 5/12 - 10
-    'ZB': '307',    #15 - 25
+    'ZF': '329',
+    'ZN': '316',
+    'TN': '7978',
+    'ZB': '307',
     # 'TWE': '10072', #19 2/12 - 19 11/12
-    'UB': '3141',   #>=25
+    'UB': '3141',
 }
 FUTPROD_COLUMNS = ['productCode', 'contractMonth', 'firstTrade', 'lastTrade', 'settlement']
 # ['firstPosition', 'lastPosition', 'firstNotice', 'firstDelivery', 'lastDelivery']
@@ -48,7 +81,7 @@ def load_futures_list(code: str):
     content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
     content_df = pd.DataFrame(content_json)[FUTPROD_COLUMNS]
     content_df.set_index(FUTPROD_COLUMNS[0], inplace=True)
-    for col in FUTPROD_COLUMNS[-3:]:
+    for col in FUTPROD_COLUMNS[2:]:
         content_df[col] = pd.to_datetime(content_df[col], format='%d %b %Y')
     filename = io.get_path(code, format='csv')
     content_df.to_csv(filename, date_format=DATE_FORMAT)
@@ -75,7 +108,7 @@ FUTPRODCODE_MAP = {
     'UB': 'UBE',
 }
 FUT_SETTLE_URL = 'https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/Settlements/{code}/FUT?tradeDate={date}'
-def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None):
+def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None, price_params: dict = None):
     fut_data_dates = load_fut_data_dates(code=code)
     if not settle_date:
         settle_date = fut_data_dates[0]
@@ -88,18 +121,18 @@ def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None):
     # settle_date = content_json["tradeDate"]
     settlements = content_json["settlements"]
     res: dict[str, float] = {}
-    for settle_i in settlements:
-        settle_price = settle_i['settle']
-        month_str = settle_i['month']
-        if settle_price != '-':
-            month_strs = month_str.split(' ')
+    for fut_r in settlements:
+        settle_price = get_field(fut_r, DataPointType.SETTLE, price_params)
+        oi, volume = get_field(fut_r, DataPointType.PREV_OI), get_field(fut_r, DataPointType.VOLUME)
+        if oi > 0 and volume > 0 and settle_price:
+            month_strs = fut_r['month'].split(' ')
             contract_code = FUTPRODCODE_MAP.get(code, code) + get_month_code(month_strs[0]) + month_strs[1]
-            res[contract_code] = float(settle_price)
+            res[contract_code] = settle_price
     return (settle_date, res)
 
 # https://www.cmegroup.com/CmeWS/mvc/Quotes/ContractsByNumber?productIds=8463&contractsNumber=100&venue=G
 FUT_QUOTES_URL = 'https://www.cmegroup.com/CmeWS/mvc/Quotes/Future/{code}/G'
-def load_fut_quotes(code: str = 'SR1'):
+def load_fut_quotes(code: str = 'SR1', price_params: dict = None):
     fut_url = FUT_QUOTES_URL.format(code=FUTPRODID_MAP[code])
     content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
     trade_date = dtm.datetime.strptime(content_json["tradeDate"], '%d %b %Y').date()
@@ -107,10 +140,10 @@ def load_fut_quotes(code: str = 'SR1'):
     res: dict[str, float] = {}
     for quote_i in quotes:
         settle_price = quote_i['priorSettle'] # ['last']
-        expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
-        contract_month = FUTPRODCODE_MAP.get(code, code) + f"{expiry_code[0]}{expiry_month[2:4]}"
-        if settle_price != '-':
-            settle_price = float(settle_price)
+        if is_valid_price(settle_price):
+            settle_price = transform_quote(settle_price, price_params)
+            expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
+            contract_month = FUTPRODCODE_MAP.get(code, code) + f"{expiry_code[0]}{expiry_month[2:4]}"
             if settle_price > 0:
                 res[contract_month] = settle_price
     return (trade_date, res)

@@ -103,12 +103,9 @@ def _init():
     global _SOFR_RATES, _FF_RATES, _SOFR_IMM_CONTRACTS, _SOFR_SERIAL_CONTRACTS, _FF_SERIAL_CONTRACTS
     _SOFR_RATES = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
     _FF_RATES = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')
-    _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(filename='SR3.csv', underlying='SOFR', name_col='productCode',
-                                                    expiry_col='lastTrade', settle_col='settlement')
-    _SOFR_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='SR1.csv', underlying='SOFR', name_col='productCode', 
-                                                    expiry_col='lastTrade', settle_col='settlement')
-    _FF_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='FF.csv', underlying='EFFR', name_col='productCode',
-                                                    expiry_col='lastTrade', settle_col='settlement')
+    _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(filename='SR3.csv', underlying='SOFR')
+    _SOFR_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='SR1.csv', underlying='SOFR')
+    _FF_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='FF.csv', underlying='EFFR')
     
     for fc in [_SOFR_RATES, _FF_RATES]:
         add_fixing_curve(fc)

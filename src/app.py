@@ -22,6 +22,7 @@ app.layout = html.Div([
     html.Div([
         dcc.DatePickerSingle(
             id='val-date-picker',
+            min_date_allowed=dtm.date.today()-dtm.timedelta(7),
             max_date_allowed=dtm.date.today(),
             clearable=True,
         ),
