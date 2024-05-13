@@ -5,7 +5,7 @@ import logging
 import argparse
 
 from common import request_web as request, io
-from common.data_model import DataPointType
+from common.models.data import DataPointType
 
 logger = logging.Logger(__name__)
 

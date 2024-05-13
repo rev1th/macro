@@ -7,7 +7,7 @@ import statsmodels.api as sm
 import pandas as pd
 import datetime as dtm
 
-from common.model import NameDateClass
+from common.base_class import NameDateClass
 from common.chrono import Tenor
 from lib import solver
 from models.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve

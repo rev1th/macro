@@ -6,7 +6,7 @@ from abc import abstractmethod
 import datetime as dtm
 import numpy as np
 
-from models.abstract_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrument
 from models.rate_curve import RateCurve
 from common.chrono import Tenor
 

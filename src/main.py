@@ -1,7 +1,7 @@
 
 import logging
 
-from config import cny_rc, usd_rc, us_bonds
+from config import cny_rc, usd_rc, us_bonds, us_bond_futs
 from lib import plotter
 
 logger = logging.Logger('')
@@ -27,7 +27,10 @@ def evaluate_bonds(value_date = None):
 
 
 if __name__ == '__main__':
-    for ycg in evaluate_rates():
-        plotter.display_rates_curve(*ycg.get_graph_info())
+    for b in us_bond_futs.construct():
+        b.get_ctd()
+    for ycg_arr in evaluate_rates():
+        for ycg in ycg_arr:
+            plotter.display_rates_curve(*ycg.get_graph_info())
     for bcm in evaluate_bonds():
         plotter.display_bonds_curve(*bcm.get_graph_info())

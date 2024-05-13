@@ -5,7 +5,7 @@ import datetime as dtm
 
 from common.chrono import Tenor
 from common.currency import Currency
-from models.abstract_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrument
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_curve import RateCurve
 

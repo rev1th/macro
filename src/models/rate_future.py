@@ -5,7 +5,7 @@ from typing import ClassVar
 import datetime as dtm
 import numpy as np
 
-from models.abstract_instrument import Future
+from common.models.future import Future
 from models.rate_curve_instrument import CurveInstrument
 from common.chrono import Tenor, DayCount, get_bdate_series
 from models.fixing import Fixing, get_fixing

@@ -1,12 +1,12 @@
 
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import ClassVar
+from typing import ClassVar, Self
 import datetime as dtm
 from enum import StrEnum
 
 from lib import solver
-from models.abstract_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrument
 from models.rate_curve import RateCurve
 from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType, Compounding
 
@@ -111,10 +111,10 @@ class Bond(BaseInstrument):
     def get_price_from_curve(self, _: RateCurve) -> float:
         """Gives Price from Bond curve"""
     
-    def copy(self):
+    def copy(self) -> Self:
         """Creates a copy of Bond"""
     
-    def roll_date(self, date: dtm.date, price: float = None):
+    def roll_date(self, date: dtm.date, price: float = None) -> Self:
         cls = self.copy()
         cls.set_market(date, price)
         return cls
@@ -175,7 +175,6 @@ class FixCouponBond(Bond):
     
     def set_market(self, date: dtm.date, price: float, trade_date: dtm.date = None) -> None:
         super().set_market(date, price, trade_date)
-        
         coupon_dates = self._coupon_frequency.generate_schedule(
             self.settle_date, self.maturity_date,
             bd_adjust=BDayAdjust(BDayAdjustType.ModifiedFollowing, self.calendar), extended=True)

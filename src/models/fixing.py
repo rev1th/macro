@@ -4,7 +4,7 @@ from enum import StrEnum
 from sortedcontainers import SortedDict
 import datetime as dtm
 
-from common.model import NameClass
+from common.base_class import NameClass
 
 
 @dataclass(frozen=True)

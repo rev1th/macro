@@ -6,7 +6,7 @@ from abc import abstractmethod
 import datetime as dtm
 
 from common.chrono import Tenor
-from models.abstract_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrument
 from models.swap_convention import SwapConvention, get_swap_convention
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_curve import RateCurve

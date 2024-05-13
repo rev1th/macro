@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from lib import solver
-from common.model import NameClass, NameDateClass
+from common.base_class import NameClass, NameDateClass
 from common.chrono import DayCount, get_bdate_series, Calendar
 from models.rate_curve_instrument import CurveInstrument
 from models.rate_future import RateFutureC
