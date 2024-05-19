@@ -1,5 +1,4 @@
 
-from typing import Union
 from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 from abc import abstractmethod
@@ -15,7 +14,7 @@ from common.chrono import Tenor
 # https://docs.pydantic.dev/latest/usage/models/#private-model-attributes
 @dataclass
 class CurveInstrument(BaseInstrument):
-    _end: Union[Tenor, dtm.date]
+    _end: Tenor | dtm.date
     _: KW_ONLY
     _notional: float = 1000000
     
@@ -59,7 +58,7 @@ class CurveInstrument(BaseInstrument):
 
 @dataclass
 class Deposit(CurveInstrument):
-    _start: Union[Tenor, dtm.date] = None
+    _start: Tenor | dtm.date | None = None
     _rate: float = field(init=False)
 
     @property

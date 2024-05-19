@@ -25,10 +25,11 @@ def evaluate_bonds(value_date = None):
     bcm_us.build()
     return [bcm_us]
 
+def evaluate_bond_futures(value_date = None):
+    return [us_bond_futs.construct(value_date)]
+
 
 if __name__ == '__main__':
-    for b in us_bond_futs.construct():
-        b.get_ctd()
     for ycg_arr in evaluate_rates():
         for ycg in ycg_arr:
             plotter.display_rates_curve(*ycg.get_graph_info())

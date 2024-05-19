@@ -47,16 +47,8 @@ class RateCurveModel(NameClass):
         return self._instruments
     
     @property
-    def collateral_curve(self) -> RateCurve:
-        return get_rate_curve(self._collateral_curve, self.date)
-    
-    @property
     def curve(self) -> RateCurve:
         return self._curve
-    
-    @property
-    def spread_from(self) -> RateCurve:
-        return get_rate_curve(self._spread_from, self.date)
     
     @property
     def knots(self) -> list[dtm.date]:
@@ -89,7 +81,7 @@ class RateCurveModel(NameClass):
                 kwargs['_daycount_type'] = self._daycount_type
             if self._spread_from:
                 curve_obj = SpreadCurve
-                kwargs['_base_curve'] = self.spread_from
+                kwargs['_base_curve'] = get_rate_curve(self._spread_from, self.date)
             else:
                 curve_obj = RateCurve
             self._curve = curve_obj(
@@ -102,6 +94,8 @@ class RateCurveModel(NameClass):
             update_rate_curve(self._curve)
             if self._rate_vol_curve:
                 self.set_convexity()
+            if self._collateral_curve:
+                self.collateral_curve = get_rate_curve_last(self._collateral_curve, self.date)
         else:
             self._curve = None
     
@@ -152,7 +146,7 @@ class RateCurveModel(NameClass):
                     sw_crv_diff = fut_implied_par - sw_ins.spread
                 node_vol = self._rate_vol_curve.get_node(node_vol_date)
                 logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.price}')
-                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE and node_vol > 0:
+                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, node_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
                     pv01_unit = abs(sw_ins.get_pv01(self.curve) * 10000 / sw_ins.notional)
@@ -162,6 +156,8 @@ class RateCurveModel(NameClass):
                     var_adjusted = np.square(node_vol) + var_offset
                     vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
                     logger.critical(f'Rate Vol Adjusted for {sw_ins.end_date} = {vol_adjusted}')
+                    if node_vol == vol_adjusted:
+                        continue
                     self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
                     return self.calibrate_convexity(node_vol_date)
                 else:
@@ -316,3 +312,11 @@ def update_rate_curve(curve: RateCurve) -> None:
     RATE_CURVE_MAP[(curve.name, curve.date)] = curve
 def get_rate_curve(name: str, date: dtm.date):
     return RATE_CURVE_MAP[(name, date)]
+
+def get_rate_curve_last(name: str, date: dtm.date):
+    last_date = None
+    for k in RATE_CURVE_MAP:
+        if k[0] == name and k[1] <= date:
+            if not last_date or last_date < k[1]:
+                last_date = k[1]
+    return RATE_CURVE_MAP[(name, last_date)]

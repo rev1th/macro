@@ -19,6 +19,13 @@ class BondFuture(Future):
     _ytm_standard: float = 0.06
     bonds_eligible: ClassVar[list[FixCouponBond]]
 
+    @property
+    def first_delivery(self):
+        return self._first_delivery
+    
+    def display_name(self):
+        return f'{self.name}_{self._min_tenor._code}'
+    
     def set_market(self, date: dtm.date, price: float, bonds: list[FixCouponBond]) -> None:
         super().set_market(date, price)
         ref_date = dtm.date(self._first_delivery.year, self._first_delivery.month, 1)

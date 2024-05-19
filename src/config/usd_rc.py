@@ -27,6 +27,7 @@ _FF_RATES = None
 _SOFR_IMM_CONTRACTS = None
 _SOFR_SERIAL_CONTRACTS = None
 _FF_SERIAL_CONTRACTS = None
+_INITIALIZED = False
 
 
 def get_valuation_dates(from_date: dtm.date):
@@ -60,7 +61,7 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
             ins_c.set_market(val_date, price)
             fut_instruments_crv.append(ins_c)
         else:
-            logger.warning(f"No price found for future {ins.name}. Skipping")
+            logger.info(f"No price found for future {ins.name}. Skipping")
     return fut_instruments_crv
 
 def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.date = None) -> list[DomesticSwap]:
@@ -100,7 +101,7 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
     return last_knot
 
 def _init():
-    global _SOFR_RATES, _FF_RATES, _SOFR_IMM_CONTRACTS, _SOFR_SERIAL_CONTRACTS, _FF_SERIAL_CONTRACTS
+    global _SOFR_RATES, _FF_RATES, _SOFR_IMM_CONTRACTS, _SOFR_SERIAL_CONTRACTS, _FF_SERIAL_CONTRACTS, _INITIALIZED
     _SOFR_RATES = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
     _FF_RATES = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')
     _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(filename='SR3.csv', underlying='SOFR')
@@ -113,9 +114,11 @@ def _init():
     for k, v in data_parser.read_swap_conventions().items():
         add_swap_convention(*k, v)
 
+    _INITIALIZED = True
+
 
 def construct(val_dt: dtm.date = None):
-    if not val_dt:
+    if not val_dt or not _INITIALIZED:
         _init()
         val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
     
