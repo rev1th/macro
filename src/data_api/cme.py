@@ -113,7 +113,7 @@ def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None, pric
     if not settle_date:
         settle_date = fut_data_dates[0]
     elif settle_date > fut_data_dates[0]:
-        return load_fut_quotes(code)
+        return load_fut_quotes(code, price_params=price_params)
     elif settle_date not in fut_data_dates:
         raise Exception(f"No futures settlement prices found for date {settle_date}")
     fut_settle_url = FUT_SETTLE_URL.format(code=FUTPRODID_MAP[code], date=settle_date.strftime(DATE_FORMAT))
@@ -139,7 +139,7 @@ def load_fut_quotes(code: str = 'SR1', price_params: dict = None):
     quotes = content_json["quotes"]
     res: dict[str, float] = {}
     for quote_i in quotes:
-        settle_price = quote_i['priorSettle'] # ['last']
+        settle_price = quote_i['last'] # ['priorSettle']
         if is_valid_price(settle_price):
             settle_price = transform_quote(settle_price, price_params)
             expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']

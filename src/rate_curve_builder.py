@@ -307,16 +307,16 @@ class RateCurveGroupModel(NameDateClass):
             node_zrates[yc.display_name()] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates
 
-RATE_CURVE_MAP: dict[tuple[str, dtm.date], RateCurve] = {}
+_RATE_CURVE_CACHE: dict[tuple[str, dtm.date], RateCurve] = {}
 def update_rate_curve(curve: RateCurve) -> None:
-    RATE_CURVE_MAP[(curve.name, curve.date)] = curve
+    _RATE_CURVE_CACHE[(curve.name, curve.date)] = curve
 def get_rate_curve(name: str, date: dtm.date):
-    return RATE_CURVE_MAP[(name, date)]
+    return _RATE_CURVE_CACHE[(name, date)]
 
 def get_rate_curve_last(name: str, date: dtm.date):
     last_date = None
-    for k in RATE_CURVE_MAP:
+    for k in _RATE_CURVE_CACHE:
         if k[0] == name and k[1] <= date:
             if not last_date or last_date < k[1]:
                 last_date = k[1]
-    return RATE_CURVE_MAP[(name, last_date)]
+    return _RATE_CURVE_CACHE[(name, last_date)]

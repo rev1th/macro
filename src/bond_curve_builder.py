@@ -11,7 +11,7 @@ from common.base_class import NameDateClass
 from common.chrono import Tenor
 from lib import solver
 from models.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
-from models.bond import Bond
+from models.bond import Bond, BondYieldMethod
 from rate_curve_builder import get_rate_curve
 
 logger = logging.Logger(__name__)
@@ -156,12 +156,13 @@ class BondCurveModelNP(BondCurveModel):
     def get_graph_info(self):
         bond_measures = []
         curve = get_rate_curve(self._base_curve, self.date)
+        yield_method = BondYieldMethod()
         for bnd in self.bonds:
             date = bnd.maturity_date
             bond_measures.append([
                 date,
-                # bnd._yield_compounding.get_rate(bond_curve.get_spread_df(date), bnd.get_settle_dcf(date)),
-                self.spread_curve.get_spread_rate(date, bnd._yield_compounding),
+                # yield_method._compounding.get_rate(curve.get_spread_df(date), bnd.get_settle_dcf(date)),
+                self.spread_curve.get_spread_rate(date, yield_method._compounding),
                 bnd.get_zspread(curve),
                 bnd.display_name(),
             ])
@@ -170,8 +171,8 @@ class BondCurveModelNP(BondCurveModel):
         bond_df.sort_index(inplace=True)
         return bond_df, None
 
-BOND_CURVE_MAP: dict[str, SpreadCurve] = {}
+_BOND_CURVE_CACHE: dict[str, SpreadCurve] = {}
 def update_bond_curve(curve: SpreadCurve) -> None:
-    BOND_CURVE_MAP[(curve.name, curve.date)] = curve
+    _BOND_CURVE_CACHE[(curve.name, curve.date)] = curve
 def get_bond_curve(name: str, date: dtm.date):
-    return BOND_CURVE_MAP[(name, date)]
+    return _BOND_CURVE_CACHE[(name, date)]

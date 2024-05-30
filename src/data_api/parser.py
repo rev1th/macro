@@ -103,7 +103,8 @@ def read_bond_futures(filename: str,
                     name_col: str = NAME_ID,
                     expiry_col: str = EXPIRY_ID,
                     first_delivery_col: str = FIRST_DELIVERY_ID,
-                    last_delivery_col: str = LAST_DELIVERY_ID) -> list[BondFuture]:
+                    last_delivery_col: str = LAST_DELIVERY_ID,
+                    **kwargs) -> list[BondFuture]:
     df = pd.read_csv(io.get_path(filename), dtype=str)
     for col in [expiry_col, first_delivery_col, last_delivery_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
@@ -115,6 +116,6 @@ def read_bond_futures(filename: str,
                     _min_tenor=min_tenor,
                     _max_tenor=max_tenor,
                     _original_term=original_term,
-                    name=row[name_col],
+                    name=row[name_col], **kwargs
                 ) for _, row in df.iterrows()]
     return expiries

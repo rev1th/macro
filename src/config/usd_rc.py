@@ -33,8 +33,8 @@ _INITIALIZED = False
 def get_valuation_dates(from_date: dtm.date):
     if not from_date:
         return [None]
-    last_val_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
-    return date_lib.get_bdate_series(from_date, last_val_date, CALENDAR)
+    current_val_date = date_lib.get_current_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
+    return date_lib.get_bdate_series(from_date, current_val_date, CALENDAR)
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
     fut_instruments_crv = []
@@ -118,9 +118,11 @@ def _init():
 
 
 def construct(val_dt: dtm.date = None):
+    last_val_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
     if not val_dt or not _INITIALIZED:
         _init()
-        val_dt = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
+        val_dt = last_val_date
+    live = val_dt > last_val_date
     
     next_btenor = date_lib.Tenor.bday(1, CALENDAR)
     meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)
@@ -129,21 +131,27 @@ def construct(val_dt: dtm.date = None):
     deposit = Deposit(next_btenor, name='SOFR')  # meeting_dates_eff[0])
     deposit.set_market(val_dt, _SOFR_RATES.get_last_value())
 
-    fut_cutoff = date_lib.Tenor('30m').get_date(val_dt)
+    fut_cutoff = '5y' if live else '30m'
+    fut_cutoff_date = date_lib.Tenor(fut_cutoff).get_date(val_dt)
     fut_instruments = _SOFR_IMM_CONTRACTS + _SOFR_SERIAL_CONTRACTS
     # Skip futures on expiry date, we only use fixing rates till T
     fut_instruments = [fi for fi in fut_instruments if deposit.end_date < fi.expiry]
     for fi in fut_instruments:
-        if fi.expiry > fut_cutoff:
+        if fi.expiry > fut_cutoff_date:
             fi.exclude_knot = True
+        else:
+            fi.exclude_knot = False
     fut_instruments.sort()
-    mdt_sc = set_step_knots(fut_instruments, meeting_dates_eff)
-
     futs_crv = get_futures_for_curve(fut_instruments, val_dt, contract_type='SOFR')
+    mdt_sc = set_step_knots(futs_crv, meeting_dates_eff)
+    
     usd_rate_vol = 1.4/100
     rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='SOFR-Vol')
-    swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff)
-    curve_instruments = [deposit] + futs_crv + swaps
+    if live:
+        curve_instruments = [deposit] + futs_crv
+    else:
+        swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff_date)
+        curve_instruments = [deposit] + futs_crv + swaps
     curve_defs = [RateCurveModel(curve_instruments,
                                   _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
                                   _rate_vol_curve=rate_vol_curve,
@@ -158,14 +166,19 @@ def construct(val_dt: dtm.date = None):
     for fi in ff_futs:
         if fi.expiry > ff_fut_cutoff:
             fi.exclude_knot = True
-    ff_mdt_sc = set_step_knots(ff_futs, meeting_dates_eff)
-    
     ff_futs_crv = get_futures_for_curve(ff_futs, val_dt, contract_type='FF')
+    ff_mdt_sc = set_step_knots(ff_futs_crv, meeting_dates_eff)
+    
     ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='FF-Vol')
-    ff_swaps = get_swaps_curve(val_dt, fixing_type='SOFR_FF', cutoff=ff_fut_cutoff)
-    ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
+    if live:
+        ff_curve_instruments = [ff_deposit] + ff_futs_crv
+        interps = [(None, 'LogLinear')]
+    else:
+        ff_swaps = get_swaps_curve(val_dt, fixing_type='SOFR_FF', cutoff=ff_fut_cutoff)
+        ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
+        interps = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')]
     curve_defs.append(RateCurveModel(ff_curve_instruments,
-                                      _interpolation_methods = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')],
+                                      _interpolation_methods=interps,
                                       _rate_vol_curve=ff_rate_vol_curve,
                                       _collateral_curve='USD-SOFR',
                                       _spread_from='USD-SOFR',

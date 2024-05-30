@@ -52,10 +52,11 @@ app.layout = html.Div([
 ])
 
 @callback(
-    Output(component_id='date_select', component_property='min_date_allowed'),
-    Output(component_id='date_select', component_property='max_date_allowed'),
+    Output(component_id='val-date-picker', component_property='min_date_allowed'),
+    Output(component_id='val-date-picker', component_property='max_date_allowed'),
+    Input(component_id='val-date-picker', component_property='n_clicks'),
 )
-def refresh_date():
+def refresh_date(*_):
     current_date = dtm.date.today()
     return current_date - dtm.timedelta(7), current_date
 
