@@ -7,10 +7,10 @@ import datetime as dtm
 
 from common.chrono import Tenor
 from common.models.base_instrument import BaseInstrument
-from models.swap_convention import SwapConvention, get_swap_convention
-from models.rate_curve_instrument import CurveInstrument
-from models.rate_curve import RateCurve
-from models.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
+from instruments.swap_convention import SwapConvention, get_swap_convention
+from instruments.rate_curve_instrument import CurveInstrument
+from instruments.rate_curve import RateCurve
+from instruments.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
 
 
 @dataclass

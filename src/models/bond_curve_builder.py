@@ -10,9 +10,9 @@ import datetime as dtm
 from common.base_class import NameDateClass
 from common.chrono import Tenor
 from lib import solver
-from models.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
-from models.bond import Bond, BondYieldMethod
-from rate_curve_builder import get_rate_curve
+from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
+from instruments.bond import Bond, BondYieldMethod
+from models.rate_curve_builder import get_rate_curve
 
 logger = logging.Logger(__name__)
 

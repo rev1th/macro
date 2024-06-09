@@ -8,9 +8,9 @@ logger = logging.Logger('')
 logger.setLevel(logging.DEBUG)
 
 
-def evaluate_rates(value_date = None):
+def evaluate_rates(start_date = None, end_date = None):
     ycg_usd = []
-    for date in usd_rc.get_valuation_dates(value_date):
+    for date in usd_rc.get_valuation_dates(start_date, end_date):
         ycg_usd_dt = usd_rc.construct(date)
         ycg_usd_dt.build(calibrate_convexity=True)
         ycg_usd.append(ycg_usd_dt)

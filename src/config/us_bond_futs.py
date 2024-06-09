@@ -5,13 +5,12 @@ import pandas as pd
 
 from common.base_class import NameDateClass
 import common.chrono as date_lib
-from common.chrono import Tenor
-from models.bond import FixCouponBond
-from models.bond_future import BondFuture
+from instruments.bond import FixCouponBond
+from instruments.bond_future import BondFuture
 import data_api.parser as data_parser
-import data_api.cme as data_cme
+import data_api.cme as cme_api
 from config import us_bonds
-from rate_curve_builder import get_rate_curve
+from models.rate_curve_builder import get_rate_curve
 
 logger = logging.Logger(__name__)
 
@@ -27,17 +26,17 @@ FUTPROD_TENORS = {
 
 def get_tenor(term: float):
     if isinstance(term, int): # or term == float(int(term))
-        return Tenor(f'{term}y')
+        return date_lib.Tenor(f'{term}y')
     else:
-        return Tenor(f'{int(term*12)}m')
+        return date_lib.Tenor(f'{int(term*12)}m')
 
 def get_contracts(value_date, bond_universe: list[FixCouponBond], code: str = 'TN') -> list[BondFuture]:
-    min_term, max_term, original_term, fut_params, price_params = FUTPROD_TENORS[code]
+    min_term, max_term, original_term, factor_params, price_params = FUTPROD_TENORS[code]
     min_tenor, max_tenor = get_tenor(min_term), get_tenor(max_term) if max_term else None
     listed_bond_futs = data_parser.read_bond_futures(filename=f'{code}.csv',
                         min_tenor=min_tenor, max_tenor=max_tenor,
-                        original_term=original_term, **fut_params)
-    _, futures_prices = data_cme.load_fut_settle_prices(code, value_date, price_params)
+                        original_term=original_term, _factor_params=factor_params)
+    _, futures_prices = cme_api.load_fut_settle_prices(code, value_date, price_params)
     bond_futs = []
     for ins in listed_bond_futs:
         if ins.name in futures_prices:

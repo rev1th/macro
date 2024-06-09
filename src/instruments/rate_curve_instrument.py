@@ -6,8 +6,8 @@ import datetime as dtm
 import numpy as np
 
 from common.models.base_instrument import BaseInstrument
-from models.rate_curve import RateCurve
 from common.chrono import Tenor
+from instruments.rate_curve import RateCurve
 
 
 # BaseModel doesn't initialize private attributes

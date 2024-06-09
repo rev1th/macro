@@ -11,8 +11,8 @@ from common.chrono import DayCount, get_bdate_series, Compounding, Calendar
 from common.base_class import NameDateClass
 
 from lib.interpolator import Interpolator
-from models.base_types import DataPoint
-from models.fixing import Fixing, get_fixing
+from instruments.base_types import DataPoint
+from instruments.fixing import Fixing, get_fixing
 
 logger = logging.Logger(__name__)
 

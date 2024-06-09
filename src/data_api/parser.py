@@ -4,10 +4,10 @@ from sortedcontainers import SortedDict
 
 from .cme import DATE_FORMAT
 from common import io
-from models.fixing import FixingCurve
-from models.rate_future import RateFutureIMM, RateFutureSerial
-from models.swap_convention import SwapLegConvention, SwapFixLegConvention, SwapFloatLegConvention
-from models.bond_future import BondFuture
+from instruments.fixing import Fixing, FixingCurve
+from instruments.rate_future import RateFutureIMM, RateFutureSerial
+from instruments.swap_convention import SwapLegConvention, SwapFixLegConvention, SwapFloatLegConvention
+from instruments.bond_future import BondFuture
 from common.chrono import Tenor
 
 NAME_ID = 'productCode'
@@ -39,7 +39,7 @@ def read_IMM_futures(filename: str,
     for id in range(1, len(df_imm)):
         row = df_imm.iloc[id]
         expiries.append(RateFutureIMM(
-            underlying,
+            Fixing(name=underlying),
             _expiry=row[expiry_col],
             _settle=row[settle_col],
             _rate_start_date=df_imm.iloc[id-1][settle_col],
@@ -56,7 +56,7 @@ def read_serial_futures(filename: str,
     for col in [expiry_col, settle_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
     expiries = [RateFutureSerial(
-                    underlying,
+                    Fixing(name=underlying),
                     _expiry=r[expiry_col],
                     _settle=r[settle_col],
                     name=r[name_col]) for _, r in df.iterrows()]
@@ -108,7 +108,7 @@ def read_bond_futures(filename: str,
     df = pd.read_csv(io.get_path(filename), dtype=str)
     for col in [expiry_col, first_delivery_col, last_delivery_col]:
         df[col] = pd.to_datetime(df[col], format = DATE_FORMAT).apply(lambda tms: tms.date())
-    expiries = [BondFuture('T',
+    expiries = [BondFuture(
                     _expiry=row[expiry_col],
                     _settle=row[expiry_col],
                     _first_delivery=row[first_delivery_col],

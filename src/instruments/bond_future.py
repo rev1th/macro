@@ -1,12 +1,13 @@
 
 from pydantic.dataclasses import dataclass
+from dataclasses import field
 import datetime as dtm
-from typing import Optional, ClassVar, Self
+from typing import Optional, ClassVar, Self, Any
 
 from common.models.future import Future
 from common.chrono import Tenor
-from models.bond import FixCouponBond
-from models.rate_curve import RateCurve
+from instruments.bond import FixCouponBond
+from instruments.rate_curve import RateCurve
 
 
 @dataclass
@@ -14,10 +15,9 @@ class BondFutureFactor(FixCouponBond):
     _months_round: int = 1
 
     @classmethod
-    def create(cls, bond: FixCouponBond, months_round: int):
+    def create(cls, bond: FixCouponBond, factor_params: dict):
         return BondFutureFactor(bond._maturity_date, bond._coupon_rate, bond._coupon_frequency,
-                        _settle_delay=bond._settle_delay,
-                        _months_round=months_round)
+                        _settle_delay=bond._settle_delay, **factor_params)
     
     def _next_coupon_ratio(self, date: dtm.date):
         m_diff = date.month - self.settle_date.month + (date.year - self.settle_date.year) * 12
@@ -62,8 +62,9 @@ class BondFuture(Future):
     _min_tenor: Tenor
     _max_tenor: Optional[Tenor]
     _original_term: Optional[float] = None
+    _underlying: Optional[FixCouponBond] = field(kw_only=True, default=None)
 
-    _months_round: int = 1
+    _factor_params: dict[str, Any] = field(default_factory=dict)
     _ytm_standard: float = 0.06
     bonds_eligible: ClassVar[list[BondFutureBond]]
 
@@ -83,7 +84,7 @@ class BondFuture(Future):
         for bond in bonds:
             if (not self._original_term or bond.original_term <= self._original_term
                 ) and min_maturity <= bond.maturity_date <= max_maturity:
-                proxy = BondFutureFactor.create(bond, self._months_round)
+                proxy = BondFutureFactor.create(bond, self._factor_params)
                 cf = proxy.get_conversion_factor(ref_date, self._ytm_standard)
                 self.bonds_eligible.append(BondFutureBond(bond, cf))
     

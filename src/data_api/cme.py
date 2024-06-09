@@ -107,6 +107,7 @@ FUTPRODCODE_MAP = {
     'ZB': '17',
     'UB': 'UBE',
 }
+MIN_MAX_OI = 0.01
 FUT_SETTLE_URL = 'https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/Settlements/{code}/FUT?tradeDate={date}'
 def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None, price_params: dict = None):
     fut_data_dates = load_fut_data_dates(code=code)
@@ -118,18 +119,21 @@ def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None, pric
         raise Exception(f"No futures settlement prices found for date {settle_date}")
     fut_settle_url = FUT_SETTLE_URL.format(code=FUTPRODID_MAP[code], date=settle_date.strftime(DATE_FORMAT))
     content_json = request.get_json(request.url_get(fut_settle_url, headers=HEADERS))
-    # settle_date = content_json["tradeDate"]
+    # assert settle_date == content_json["tradeDate"], f"Inconsistent prices {settle_date}"
     settlements = content_json["settlements"]
     res: dict[str, float] = {}
+    max_oi = 0
     for fut_r in settlements:
         settle_price = get_field(fut_r, DataPointType.SETTLE, price_params)
         oi, volume = get_field(fut_r, DataPointType.PREV_OI), get_field(fut_r, DataPointType.VOLUME)
-        if oi > 0 and volume > 0 and settle_price:
+        max_oi = max(oi, max_oi)
+        if oi > max_oi * MIN_MAX_OI and volume > 0 and settle_price:
             month_strs = fut_r['month'].split(' ')
             contract_code = FUTPRODCODE_MAP.get(code, code) + get_month_code(month_strs[0]) + month_strs[1]
             res[contract_code] = settle_price
     return (settle_date, res)
 
+MIN_MAX_VOLUME = 0.001
 # https://www.cmegroup.com/CmeWS/mvc/Quotes/ContractsByNumber?productIds=8463&contractsNumber=100&venue=G
 FUT_QUOTES_URL = 'https://www.cmegroup.com/CmeWS/mvc/Quotes/Future/{code}/G'
 def load_fut_quotes(code: str = 'SR1', price_params: dict = None):
@@ -138,13 +142,16 @@ def load_fut_quotes(code: str = 'SR1', price_params: dict = None):
     trade_date = dtm.datetime.strptime(content_json["tradeDate"], '%d %b %Y').date()
     quotes = content_json["quotes"]
     res: dict[str, float] = {}
+    max_volume = 0
     for quote_i in quotes:
         settle_price = quote_i['last'] # ['priorSettle']
+        volume = get_field(quote_i, DataPointType.VOLUME)
+        max_volume = max(volume, max_volume)
         if is_valid_price(settle_price):
             settle_price = transform_quote(settle_price, price_params)
             expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
             contract_month = FUTPRODCODE_MAP.get(code, code) + f"{expiry_code[0]}{expiry_month[2:4]}"
-            if settle_price > 0:
+            if volume > max_volume * MIN_MAX_VOLUME and settle_price > 0:
                 res[contract_month] = settle_price
     return (trade_date, res)
 

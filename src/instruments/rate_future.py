@@ -6,11 +6,11 @@ import datetime as dtm
 import numpy as np
 
 from common.models.future import Future
-from models.rate_curve_instrument import CurveInstrument
+from instruments.rate_curve_instrument import CurveInstrument
 from common.chrono import Tenor, DayCount, get_bdate_series
-from models.fixing import Fixing, get_fixing
-from models.rate_curve import RateCurve
-from models.vol_curve import VolCurve
+from instruments.fixing import Fixing, get_fixing
+from instruments.rate_curve import RateCurve
+from instruments.vol_curve import VolCurve
 
 
 @dataclass
@@ -25,7 +25,7 @@ class RateFuture(Future):
         return self._convexity
     
     def underlying_rate(self, date: dtm.date) -> float:
-        return get_fixing(Fixing(self.underlying), date)
+        return get_fixing(self.underlying, date)
     
     def set_convexity(self, rate_vol_curve: VolCurve, daycount_type: DayCount = DayCount.ACT360) -> None:
         if self._rate_start_date <= self.value_date:
@@ -59,7 +59,7 @@ class RateFutureIMM(RateFutureC):
         self._rate_end_date = self.settle_date
     
     def get_settle_rate(self, curve: RateCurve) -> float:
-        return curve.get_forecast_rate(self._rate_start_date, self.settle_date, Fixing(self.underlying))
+        return curve.get_forecast_rate(self._rate_start_date, self.settle_date, self.underlying)
 
 
 @dataclass

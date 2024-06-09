@@ -6,7 +6,7 @@ from typing import Optional
 
 from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
 from common.currency import Currency
-from models.fixing import Fixing, RateFixingType
+from instruments.fixing import Fixing, RateFixingType
 
 
 @dataclass(frozen=True)
@@ -90,7 +90,7 @@ class SwapFloatLegConvention(SwapLegConvention):
     
     @property
     def fixing(self):
-        return Fixing(self._fixing)
+        return Fixing(name=self._fixing)
     
     @property
     def fixing_type(self):

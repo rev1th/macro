@@ -20,7 +20,7 @@ app.layout = html.Div([
     html.H3('Macro Analytics App', style=_DIV_STYLE),
     html.Br(),
     html.Div([
-        dcc.DatePickerSingle(
+        dcc.DatePickerRange(
             id='val-date-picker',
             clearable=True,
         ),
@@ -64,15 +64,17 @@ def refresh_date(*_):
 @callback(
     Output(component_id='rates-curves', component_property='children'),
     Output(component_id='rates-curves-loading', component_property='children'),
-    Input(component_id='val-date-picker', component_property='date'),
+    Input(component_id='val-date-picker', component_property='start_date'),
+    Input(component_id='val-date-picker', component_property='end_date'),
     Input(component_id='load_rates', component_property='n_clicks'),
     running=[(Output(component_id='load_bonds', component_property='disabled'), True, False)],
 )
-def load_rates(date_str: str, *_):
-    value_date = dtm.date.fromisoformat(date_str) if date_str else None
+def load_rates(start_date_str: str, end_date_str: str, *_):
+    start_date = dtm.date.fromisoformat(start_date_str) if start_date_str else None
+    end_date = dtm.date.fromisoformat(end_date_str) if end_date_str else None
     try:
         r_tabvals = []
-        for ycg_arr in main.evaluate_rates(value_date):
+        for ycg_arr in main.evaluate_rates(start_date, end_date):
             summary_df = pd.concat([ycg.get_calibration_summary() for ycg in ycg_arr])
             graph_info = ({}, {})
             for ycg in ycg_arr:
@@ -96,7 +98,7 @@ def load_rates(date_str: str, *_):
 @callback(
     Output(component_id='bonds-curves', component_property='children'),
     Output(component_id='bonds-curves-loading', component_property='children'),
-    State(component_id='val-date-picker', component_property='date'),
+    State(component_id='val-date-picker', component_property='start_date'),
     # Input(component_id='rates-curves', component_property='children'),
     Input(component_id='load_bonds', component_property='n_clicks'),
     prevent_initial_call=True,
@@ -156,7 +158,7 @@ def recalc_bonds(date_str: str):
 @callback(
     Output(component_id='bond-futures', component_property='children'),
     Output(component_id='bond-futures-loading', component_property='children'),
-    Input(component_id='val-date-picker', component_property='date'),
+    Input(component_id='val-date-picker', component_property='start_date'),
     Input(component_id='load_bond_futures', component_property='n_clicks'),
 )
 def load_bond_futures(date_str: str, *_):

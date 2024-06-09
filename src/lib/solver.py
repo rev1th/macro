@@ -1,6 +1,7 @@
 
 from scipy import optimize
 import logging
+import time
 
 logger = logging.Logger(__name__)
 
@@ -34,13 +35,16 @@ def find_root(error_f, args: tuple[any] = (), bracket: tuple[float] = None, init
         raise Exception(f"Failed to converge after {solver.iterations} iterations due to {solver.flag}")
     return solver.root
 
-def find_fit(cost_f, init_guess: list[float], jacobian=None) -> list[float]:
+def find_fit(cost_f, init_guess: list[float], jacobian=None, **kwargs) -> list[float]:
+    start = time.time()
     solver = optimize.minimize(
             fun=cost_f,
             x0=init_guess,
             jac=jacobian,
+            **kwargs
         )
-    logger.error(f"Optimization iter: {solver.nit}, fev: {solver.nfev}, jev: {solver.njev}")
+    end = time.time()
+    logger.error(f"Optimization iter: {solver.nit}, fev: {solver.nfev}, jev: {solver.njev}, time: {end-start}")
     if not solver.success:
         logger.error(f"Failed to minimize: {solver.message}")
     return solver.x

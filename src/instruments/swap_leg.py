@@ -6,8 +6,8 @@ from abc import abstractmethod
 import datetime as dtm
 
 from common.chrono import Tenor
-from models.swap_convention import SwapLegConvention, SwapFloatLegConvention
-from models.rate_curve import RateCurve
+from instruments.swap_convention import SwapLegConvention, SwapFloatLegConvention
+from instruments.rate_curve import RateCurve
 
 
 @dataclass

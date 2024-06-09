@@ -10,12 +10,12 @@ import pandas as pd
 from lib import solver
 from common.base_class import NameClass, NameDateClass
 from common.chrono import DayCount, get_bdate_series, Calendar
-from models.rate_curve_instrument import CurveInstrument
-from models.rate_future import RateFutureC
-from models.swap import DomesticSwap, BasisSwap, SwapCommonC
-from models.fx import FXSpot, FXSwapC
-from models.rate_curve import RateCurve, SpreadCurve
-from models.vol_curve import VolCurve
+from instruments.rate_curve_instrument import CurveInstrument
+from instruments.rate_future import RateFutureC
+from instruments.swap import DomesticSwap, BasisSwap, SwapCommonC
+from instruments.fx import FXSpot, FXSwapC
+from instruments.rate_curve import RateCurve, SpreadCurve
+from instruments.vol_curve import VolCurve
 
 CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
@@ -41,6 +41,7 @@ class RateCurveModel(NameClass):
     _curve: ClassVar[RateCurve]
     _constructor: ClassVar[NameDateClass]
     _knots: ClassVar[list[dtm.date]]
+    _knots_instruments: ClassVar[dict[dtm.date, CurveInstrument]]
 
     @property
     def instruments(self) -> list[CurveInstrument]:
@@ -62,11 +63,15 @@ class RateCurveModel(NameClass):
         return [inst for inst in self.instruments if inst.knot]
     
     def reset(self, date: dtm.date = None) -> None:
-        knot_dates = []
+        knots_instruments = {}
         for ins in self.instruments:
-            if ins.knot and (not knot_dates or knot_dates[-1] != ins.knot):
-                knot_dates.append(ins.knot)
-        self._knots = knot_dates
+            ins_knot = ins.knot
+            if ins_knot:
+                if ins_knot not in knots_instruments:
+                    knots_instruments[ins_knot] = []
+                knots_instruments[ins_knot].append(ins)
+        self._knots = list(knots_instruments.keys())
+        self._knots_instruments = knots_instruments
         if date:
             kwargs = {}
             if self._interpolation_methods:
@@ -121,9 +126,54 @@ class RateCurveModel(NameClass):
     
     def get_bootstrap_knot_error(self, value: float, date: dtm.date) -> float:
         self.curve.update_node(date, value)
-        knot_ins = [ins for ins in self.instruments if ins.knot == date]
+        knot_ins = self._knots_instruments[date]
         assert len(knot_ins) > 0, logger.critical(f'No instruments to solve knot {date}')
         return self.get_instrument_pv(knot_ins[-1])
+    
+    def get_solver_knot_error(self, values: list[float], date: dtm.date) -> float:
+        self.curve.update_node(date, np.exp(values[0]))
+        knot_insts = self._knots_instruments[date]
+        errors = np.zeros(len(knot_insts))
+        for ki, ins in enumerate(knot_insts):
+            errors[ki] = self.get_instrument_pv(ins)
+        return np.sqrt(np.mean(errors**2))
+    
+    def get_jacobian_knot(self, values: list[float], date: dtm.date) -> list[float]:
+        knot_insts = self._knots_instruments[date]
+        pvs = np.zeros(len(knot_insts))
+        self.curve.update_node(date, np.exp(values[0]))
+        for ki, inst in enumerate(knot_insts):
+            pvs[ki] = self.get_instrument_pv(inst)
+        
+        dvalue = self.curve.get_val_dcf(date) * EPSILON
+        pvs_up = np.zeros(len(knot_insts))
+        value_up = values[0] + dvalue
+        self.curve.update_node(date, np.exp(value_up))
+        for ki, inst in enumerate(knot_insts):
+            pvs_up[ki] = self.get_instrument_pv(inst)
+        # pvs_down = np.zeros(len(knot_insts))
+        # value_down = values[0] - dvalue
+        # self.curve.update_node(date, np.exp(value_down))
+        # for ki, inst in enumerate(knot_insts):
+        #     pvs_down[ki] = self.get_instrument_pv(inst)
+
+        gradient = 2 * np.mean((pvs_up - pvs) * pvs) / (np.sqrt(np.mean(pvs*pvs)) * EPSILON)
+        # gradient = np.mean((pvs_up - pvs_down) * pvs) / (np.sqrt(np.mean(pvs*pvs)) * 2 * dvalue)
+        return np.array(gradient)
+    
+    def solve_knot(self, date: dtm.date) -> bool:
+        if False: # len(self._knots_instruments[date]) > 1:
+            solver.find_fit(
+                cost_f=self.get_solver_knot_error,
+                args=(date,), init_guess=0.0, tol=100,
+                jacobian=self.get_jacobian_knot)
+        else:
+            solver.find_root(
+                self.get_bootstrap_knot_error,
+                args=(date,),
+                bracket=[DF_LOWER_LIMIT, DF_UPPER_LIMIT]
+            )
+        return True
     
     def set_convexity(self) -> None:
         for f_ins in self.instruments:
@@ -195,11 +245,7 @@ class RateCurveGroupModel(NameDateClass):
             for crv_mod in self.models:
                 if k not in crv_mod.knots:
                     continue
-                solver.find_root(
-                    crv_mod.get_bootstrap_knot_error,
-                    args=(k,),
-                    bracket=[DF_LOWER_LIMIT, DF_UPPER_LIMIT]
-                )
+                crv_mod.solve_knot(k)
         for i, crv_mod in enumerate(self.models):
             error = 0
             for j, nd in enumerate(crv_mod.curve.nodes):

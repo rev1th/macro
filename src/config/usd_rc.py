@@ -4,14 +4,14 @@ import logging
 from copy import deepcopy
 
 import common.chrono as date_lib
-from models.fixing import add_fixing_curve
-from models.swap_convention import add_swap_convention
-from models.rate_curve_instrument import Deposit
-from models.swap import DomesticSwap, BasisSwap
+from instruments.fixing import add_fixing_curve
+from instruments.swap_convention import add_swap_convention
+from instruments.rate_curve_instrument import Deposit
+from instruments.swap import DomesticSwap, BasisSwap
+from instruments.vol_curve import VolCurve
 import data_api.parser as data_parser
-import data_api.cme as data_cme
-from rate_curve_builder import RateCurveModel, RateCurveGroupModel
-from models.vol_curve import VolCurve
+import data_api.cme as cme_api
+from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
 
 logger = logging.Logger(__name__)
 
@@ -30,11 +30,15 @@ _FF_SERIAL_CONTRACTS = None
 _INITIALIZED = False
 
 
-def get_valuation_dates(from_date: dtm.date):
+def get_valuation_dates(from_date: dtm.date, to_date: dtm.date = None):
     if not from_date:
-        return [None]
-    current_val_date = date_lib.get_current_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
-    return date_lib.get_bdate_series(from_date, current_val_date, CALENDAR)
+        if not to_date:
+            return [None]
+        else:
+            return [to_date]
+    if not to_date:
+        to_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
+    return date_lib.get_bdate_series(from_date, to_date, CALENDAR)
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
     fut_instruments_crv = []
@@ -51,7 +55,7 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     elif contract_type == 'FF':
         codes = ['FF']
     for code in codes:
-        fut_settle_data = data_cme.load_fut_settle_prices(code, val_date)
+        fut_settle_data = cme_api.load_fut_settle_prices(code, val_date)
         futures_prices.update(fut_settle_data[1])
     for ins in fut_instruments:
         if ins.name in futures_prices:
@@ -65,7 +69,7 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     return fut_instruments_crv
 
 def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.date = None) -> list[DomesticSwap]:
-    swap_prices = data_cme.load_swap_data(fixing_type)
+    swap_prices = cme_api.load_swap_data(fixing_type)
     assert val_date in swap_prices, f"Swap prices missing for {val_date}"
     swap_convention, swap_obj = FIXING_SWAP_MAP[fixing_type]
     swap_instruments = []
@@ -144,7 +148,7 @@ def construct(val_dt: dtm.date = None):
     fut_instruments.sort()
     futs_crv = get_futures_for_curve(fut_instruments, val_dt, contract_type='SOFR')
     mdt_sc = set_step_knots(futs_crv, meeting_dates_eff)
-    
+
     usd_rate_vol = 1.4/100
     rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='SOFR-Vol')
     if live:

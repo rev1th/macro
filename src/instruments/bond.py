@@ -7,8 +7,8 @@ from enum import StrEnum
 
 from lib import solver
 from common.models.base_instrument import BaseInstrument
-from models.rate_curve import RateCurve
 from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType, Compounding
+from instruments.rate_curve import RateCurve
 
 
 FACE_VALUE = 100

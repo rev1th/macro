@@ -5,24 +5,24 @@ import logging
 import common.chrono as date_lib
 from common.currency import Currency
 
-import data_api.cfets as data_cfets
-from rate_curve_builder import RateCurveModel, RateCurveGroupModel
-from models.rate_curve_instrument import Deposit
-from models.swap import DomesticSwap
-from models.fx import FXSwapC, FXSpot
+import data_api.cfets as cfets_api
+from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
+from instruments.rate_curve_instrument import Deposit
+from instruments.swap import DomesticSwap
+from instruments.fx import FXSwapC, FXSpot
 
 logger = logging.Logger(__name__)
 
 
 def get_cny_swaps_curve(val_date: dtm.date, fixing_type: str = 'FR007') -> list[DomesticSwap]:
-    data_date, swap_prices = data_cfets.load_swaps(fixing_type)
+    data_date, swap_prices = cfets_api.load_swaps(fixing_type)
     if fixing_type == 'FR007':
-        data_date, rates = data_cfets.load_fixings('FR')
+        data_date, rates = cfets_api.load_fixings('FR')
         deposit = Deposit(date_lib.Tenor('7D'), name=fixing_type)
         deposit.set_market(data_date, rates[fixing_type] / 100)
         swap_convention = 'CNY_7DR'
     elif fixing_type == 'Shibor3M':
-        data_date, rates = data_cfets.load_fixings('Shibor')
+        data_date, rates = cfets_api.load_fixings('Shibor')
         deposit = Deposit(date_lib.Tenor('3M'), name=fixing_type)
         deposit.set_market(data_date, rates['3M'] / 100)
         swap_convention = 'CNY_SHIBOR'
@@ -37,8 +37,8 @@ def get_cny_swaps_curve(val_date: dtm.date, fixing_type: str = 'FR007') -> list[
 def get_cny_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwapC]]:
     ccy = 'CNY'
     ccy_obj = Currency(ccy)
-    spot_data = data_cfets.load_spot()
-    data_date, cny_fx_data = data_cfets.load_fx()
+    spot_data = cfets_api.load_spot()
+    data_date, cny_fx_data = cfets_api.load_fx()
     inverse = spot_data[ccy_ref][0].startswith(ccy_ref)
     spot_settle_date = cny_fx_data[1][2]
     

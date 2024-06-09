@@ -6,13 +6,14 @@ from sortedcontainers import SortedDict
 import datetime as dtm
 
 from common.base_class import NameClass
+from common.models.base_instrument import BaseInstrument
 
 logger = logging.Logger(__name__)
 
 
-@dataclass(frozen=True)
-class Fixing:
-    name: str
+@dataclass
+class Fixing(BaseInstrument):
+    pass
 
 
 class RateFixingType(StrEnum):
@@ -46,10 +47,10 @@ class FixingCurve(NameClass):
         return self._datevalue[self.get_last_date()]
 
 
-_FIXING_CURVE_CACHE: dict[Fixing, FixingCurve] = {}
+_FIXING_CURVE_CACHE: dict[str, FixingCurve] = {}
 
 def get_fixing(fixing: Fixing, date: dtm.date) -> float:
-    return _FIXING_CURVE_CACHE[fixing].get(date)
+    return _FIXING_CURVE_CACHE[fixing.name].get(date)
 
 def add_fixing_curve(fixing_curve: FixingCurve) -> None:
-    _FIXING_CURVE_CACHE[Fixing(fixing_curve.name)] = fixing_curve
+    _FIXING_CURVE_CACHE[fixing_curve.name] = fixing_curve
