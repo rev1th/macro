@@ -1,6 +1,16 @@
+# Description
+
+* USD (SOFR and EFFR) curve construction using CME futures and swaps data
+* CNY (cross currency, FR007 and SHIBOR) curve construction using CFETS swaps data
+* US Treasury bond curve construction (asset swap spreads) using treasury direct data
+* Bond Futures implied repo basis & rates using CME data
+<br/><br/>
+
 # Setup
+```
 git clone https://github.com/rev1th/common.git<br />
 conda env create -f environment.yml
+```
 
 ## Update rate fixings (daily)
 ```

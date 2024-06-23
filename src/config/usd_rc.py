@@ -35,7 +35,7 @@ def get_valuation_dates(from_date: dtm.date, to_date: dtm.date = None):
         if not to_date:
             return [None]
         else:
-            return [to_date]
+            return date_lib.get_bdate_series(to_date, to_date, CALENDAR)
     if not to_date:
         to_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
     return date_lib.get_bdate_series(from_date, to_date, CALENDAR)

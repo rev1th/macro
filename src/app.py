@@ -98,7 +98,7 @@ def load_rates(start_date_str: str, end_date_str: str, *_):
 @callback(
     Output(component_id='bonds-curves', component_property='children'),
     Output(component_id='bonds-curves-loading', component_property='children'),
-    State(component_id='val-date-picker', component_property='start_date'),
+    State(component_id='val-date-picker', component_property='end_date'),
     # Input(component_id='rates-curves', component_property='children'),
     Input(component_id='load_bonds', component_property='n_clicks'),
     prevent_initial_call=True,
@@ -158,7 +158,7 @@ def recalc_bonds(date_str: str):
 @callback(
     Output(component_id='bond-futures', component_property='children'),
     Output(component_id='bond-futures-loading', component_property='children'),
-    Input(component_id='val-date-picker', component_property='start_date'),
+    Input(component_id='val-date-picker', component_property='end_date'),
     Input(component_id='load_bond_futures', component_property='n_clicks'),
 )
 def load_bond_futures(date_str: str, *_):

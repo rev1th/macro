@@ -13,7 +13,7 @@ from common.chrono import DayCount, get_bdate_series, Calendar
 from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_future import RateFutureC
 from instruments.swap import DomesticSwap, BasisSwap, SwapCommonC
-from instruments.fx import FXSpot, FXSwapC
+from instruments.fx import FXSpot, FXSwapC, FXCurve
 from instruments.rate_curve import RateCurve, SpreadCurve
 from instruments.vol_curve import VolCurve
 
@@ -84,9 +84,15 @@ class RateCurveModel(NameClass):
                 kwargs['interpolation_methods'] = self._interpolation_methods
             if self._daycount_type:
                 kwargs['_daycount_type'] = self._daycount_type
+            if self._collateral_curve:
+                self.collateral_curve = get_rate_curve_last(self._collateral_curve, self.date)
             if self._spread_from:
                 curve_obj = SpreadCurve
                 kwargs['_base_curve'] = get_rate_curve(self._spread_from, self.date)
+            elif self._collateral_spot:
+                curve_obj = FXCurve
+                kwargs['_spot'] = self._collateral_spot
+                kwargs['_base_curve'] = self.collateral_curve
             else:
                 curve_obj = RateCurve
             self._curve = curve_obj(
@@ -99,8 +105,6 @@ class RateCurveModel(NameClass):
             update_rate_curve(self._curve)
             if self._rate_vol_curve:
                 self.set_convexity()
-            if self._collateral_curve:
-                self.collateral_curve = get_rate_curve_last(self._collateral_curve, self.date)
         else:
             self._curve = None
     
@@ -207,9 +211,11 @@ class RateCurveModel(NameClass):
                     vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
                     logger.critical(f'Rate Vol Adjusted for {sw_ins.end_date} = {vol_adjusted}')
                     if node_vol == vol_adjusted:
-                        continue
-                    self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
-                    return self.calibrate_convexity(node_vol_date)
+                        node_vol_date = sw_ins.end_date
+                        self._rate_vol_curve.add_node(node_vol_date, node_vol)
+                    else:
+                        self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
+                        return self.calibrate_convexity(node_vol_date)
                 else:
                     node_vol_date = sw_ins.end_date
                     self._rate_vol_curve.add_node(node_vol_date, node_vol)
