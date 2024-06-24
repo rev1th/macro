@@ -8,7 +8,7 @@ import numpy as np
 from common.models.future import Future
 from instruments.rate_curve_instrument import CurveInstrument
 from common.chrono import Tenor, DayCount, get_bdate_series
-from instruments.fixing import Fixing, get_fixing
+from instruments.fixing import get_fixing
 from instruments.rate_curve import RateCurve
 from instruments.vol_curve import VolCurve
 

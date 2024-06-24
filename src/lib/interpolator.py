@@ -4,8 +4,8 @@ from typing import ClassVar
 import numpy as np
 import bisect
 
-from common.interpolator import *
-from lib import solver
+from common.numeric.interpolator import *
+from common.numeric import solver
 
 fromString_super = Interpolator.fromString
 

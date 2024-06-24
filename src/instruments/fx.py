@@ -58,7 +58,6 @@ class FXSpot(FXBase):
 class FXForward(FXSpot):
     _expiry: Tenor
     
-    @property
     def expiry(self) -> dtm.date:
         return self._expiry.get_date(self.value_date)
 
@@ -78,10 +77,6 @@ class FXSwap(FXBase):
     
     @property
     def price(self) -> float:
-        return self._points
-    
-    @property
-    def points(self) -> float:
         return self._points
     
     @property
@@ -121,18 +116,22 @@ class FXSwapC(FXSwap, CurveInstrument):
             fwd_pts = (ccy2_far_df / ccy1_far_df - ccy2_near_df / ccy1_near_df) * spot.price
         else:
             fwd_pts = (ccy1_far_df / ccy2_far_df - ccy1_near_df / ccy2_near_df) * spot.price
-        return self.notional * (fwd_pts - self.points)
+        return self.notional * (fwd_pts - self._points)
 
 
 @dataclass
 class FXCurve(RateCurve):
     _spot: FXSpot
-    _base_curve: RateCurve
+    _domestic_curve: RateCurve
     
     def get_fx_rate(self, date: dtm.date) -> float:
         spot_date = self._spot.settle_date
         if date == spot_date:
             return self._spot.price
         else:
-            pv_price = self._spot.price / self.get_df(spot_date) * self._base_curve.get_df(spot_date)
-            return pv_price * self.get_df(date) / self._base_curve.get_df(date)
+            if self._spot.inverse:
+                spot_pv = self._spot.price * self.get_df(spot_date) / self._domestic_curve.get_df(spot_date)
+                return spot_pv * self._domestic_curve.get_df(date) / self.get_df(date)
+            else:
+                spot_pv = self._spot.price * self._domestic_curve.get_df(spot_date) / self.get_df(spot_date)
+                return spot_pv * self.get_df(date) / self._domestic_curve.get_df(date)

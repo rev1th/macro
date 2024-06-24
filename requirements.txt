@@ -6,4 +6,5 @@ sortedcontainers==2.4.*
 pandas==2.0.*
 plotly==5.16.*
 dash==2.15.*
+dash_ag_grid==31.*
 ./../common/dist/common-1.0-py3-none-any.whl

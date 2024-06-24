@@ -5,9 +5,9 @@ from typing import ClassVar, Self
 import datetime as dtm
 from enum import StrEnum
 
-from lib import solver
 from common.models.base_instrument import BaseInstrument
 from common.chrono import Tenor, DayCount, Frequency, BDayAdjust, BDayAdjustType, Compounding
+from common.numeric import solver
 from instruments.rate_curve import RateCurve
 
 
@@ -16,10 +16,6 @@ FACE_VALUE = 100
 class BondPriceType(StrEnum):
     CLEAN = 'clean'
     DIRTY = 'dirty'
-
-class YieldType(StrEnum):
-    YTM = 'ytm'
-    DISCOUNT = 'discount'
 
 @dataclass(frozen=True)
 class CashFlow:
@@ -90,7 +86,7 @@ class Bond(BaseInstrument):
         return yield_method._compounding.get_rate(curve.get_df(date) / curve.get_df(self.settle_date),
                                                     self.get_settle_dcf(date))
     
-    def get_yield(self, _: YieldType) -> float:
+    def get_yield(self, _: BondYieldMethod) -> float:
         """Gives Yield of instrument"""
     
     def get_macaulay_duration(self) -> float:
@@ -193,7 +189,7 @@ class FixCouponBond(Bond):
         return self._coupon_frequency.get_unit_dcf()
     
     def get_full_price(self) -> float:
-        return self._price + self.acrrued_interest
+        return self._price + self.acrrued_interest * FACE_VALUE
     
     def get_price_from_yield(self, yld: float, yield_method = BondYieldMethod()) -> float:
         c_dcf = self.get_coupon_dcf()

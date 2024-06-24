@@ -89,10 +89,18 @@ def load_futures_list(code: str):
     
     return content_df
 
+def request_get_retry(url: str, max_tries: int = 3):
+    try:
+        return request.get_json(request.url_get(url, headers=HEADERS))
+    except Exception as ex:
+        if max_tries <= 0:
+            logger.warning(f'Request error: {ex}')
+        return request_get_retry(url, max_tries-1)
+
 FUT_DATA_DATES_URL = 'https://www.cmegroup.com/CmeWS/mvc/Settlements/Futures/TradeDate/{code}'
 def load_fut_data_dates(code: str = 'SR1') -> list[dtm.date]:
     fut_settle_dates_url = FUT_DATA_DATES_URL.format(code=FUTPRODID_MAP[code])
-    content_json = request.get_json(request.url_get(fut_settle_dates_url, headers=HEADERS))
+    content_json = request_get_retry(fut_settle_dates_url)
     settle_dates = []
     for dr in content_json:
         settle_dates.append(dtm.datetime.strptime(dr[0], DATE_FORMAT).date())
@@ -118,7 +126,7 @@ def load_fut_settle_prices(code: str = 'SR1', settle_date: dtm.date = None, pric
     elif settle_date not in fut_data_dates:
         raise Exception(f"No futures settlement prices found for date {settle_date}")
     fut_settle_url = FUT_SETTLE_URL.format(code=FUTPRODID_MAP[code], date=settle_date.strftime(DATE_FORMAT))
-    content_json = request.get_json(request.url_get(fut_settle_url, headers=HEADERS))
+    content_json = request_get_retry(fut_settle_url)
     # assert settle_date == content_json["tradeDate"], f"Inconsistent prices {settle_date}"
     settlements = content_json["settlements"]
     res: dict[str, float] = {}
@@ -138,7 +146,7 @@ MIN_MAX_VOLUME = 0.001
 FUT_QUOTES_URL = 'https://www.cmegroup.com/CmeWS/mvc/Quotes/Future/{code}/G'
 def load_fut_quotes(code: str = 'SR1', price_params: dict = None):
     fut_url = FUT_QUOTES_URL.format(code=FUTPRODID_MAP[code])
-    content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
+    content_json = request_get_retry(fut_url)
     trade_date = dtm.datetime.strptime(content_json["tradeDate"], '%d %b %Y').date()
     quotes = content_json["quotes"]
     res: dict[str, float] = {}
@@ -162,7 +170,7 @@ SWAP_MAP = {
     'SOFR_FF': "sofrFedFundRates",
 }
 def load_swap_data(fixing_type: str = 'SOFR') -> dict[dtm.date, dict[str, float]]:
-    content_json = request.get_json(request.url_get(SWAP_URL, headers=HEADERS))
+    content_json = request_get_retry(SWAP_URL)
     curves = content_json["resultsCurve"]
     res = {}
     for curve_i in curves:

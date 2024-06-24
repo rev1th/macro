@@ -7,9 +7,9 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 
-from lib import solver
 from common.base_class import NameClass, NameDateClass
 from common.chrono import DayCount, get_bdate_series, Calendar
+from common.numeric import solver
 from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_future import RateFutureC
 from instruments.swap import DomesticSwap, BasisSwap, SwapCommonC
@@ -92,7 +92,7 @@ class RateCurveModel(NameClass):
             elif self._collateral_spot:
                 curve_obj = FXCurve
                 kwargs['_spot'] = self._collateral_spot
-                kwargs['_base_curve'] = self.collateral_curve
+                kwargs['_domestic_curve'] = self.collateral_curve
             else:
                 curve_obj = RateCurve
             self._curve = curve_obj(

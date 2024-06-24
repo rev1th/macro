@@ -6,13 +6,13 @@ from sortedcontainers import SortedDict
 import datetime as dtm
 
 from common.base_class import NameClass
-from common.models.base_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrumentP
 
 logger = logging.Logger(__name__)
 
 
 @dataclass
-class Fixing(BaseInstrument):
+class Fixing(BaseInstrumentP):
     pass
 
 
