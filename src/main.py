@@ -21,8 +21,8 @@ def evaluate_rates_curves(start_date = None, end_date = None):
     return [ycg_usd, [ycg_cny]]
 
 _CACHED_DATA = {}
-def evaluate_bonds_curves(value_date = None):
-    bcm_us = us_bonds.construct(value_date)
+def evaluate_bonds_curves(value_date = None, **kwargs):
+    bcm_us = us_bonds.construct(value_date, **kwargs)
     bcm_us.build()
     _CACHED_DATA[value_date] = bcm_us
     return [bcm_us]

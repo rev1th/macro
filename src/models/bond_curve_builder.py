@@ -21,15 +21,13 @@ logger = logging.Logger(__name__)
 class BondCurveModel(NameDateClass):
 
     _base_curve: str
-    _bonds: list[Bond]
+    _bonds: list[tuple[Bond, float]]
     
-    @property
     def base_curve(self):
         return get_rate_curve(self._base_curve, self.date)
-
-    @property
+    
     def bonds(self):
-        return self._bonds
+        return [br[0] for br in self._bonds]
     
     def build(self) -> True:
         """Builds bond curve"""
@@ -38,7 +36,7 @@ class BondCurveModel(NameDateClass):
         measures = []
         if date:
             rolled_curve = RollForwardCurve(self.spread_curve, date)
-        for bnd in sorted(self._bonds):
+        for bnd, _ in sorted(self._bonds):
             if date and date > bnd.value_date:
                 if date < bnd.maturity_date:
                     bnd = bnd.roll_date(date)
@@ -76,7 +74,7 @@ class BondCurveModelNS(BondCurveModel):
     def get_factor_params(self):
         xs = []
         decay_rate = self._decay_rate
-        for ins in self.bonds:
+        for ins, _ in self._bonds:
             dcf = ins.get_settle_dcf(ins.maturity_date)
             decay_factor = np.exp(-decay_rate * dcf)
             slope_factor = (1 - decay_factor) / (decay_rate * dcf)
@@ -85,8 +83,8 @@ class BondCurveModelNS(BondCurveModel):
     
     def build(self):
         x_in = self.get_factor_params()
-        crv = self.base_curve
-        y = [b_obj.get_zspread(crv) for b_obj in self.bonds]
+        crv = self.base_curve()
+        y = [bond.get_zspread(crv) for bond, _ in self._bonds]
         # x_in = sm.add_constant(r_v[0], prepend=False)
         res = sm.OLS(y, x_in).fit()
         self.curve = BondCurveNS(self.date, self._base_curve, tuple(res.params), self._decay_rate)
@@ -104,8 +102,9 @@ class BondCurveModelNP(BondCurveModel):
         curve = self.spread_curve
         curve.update_nodes(log_values=values)
         err = 0
-        for bnd in self.bonds:
-            err += (bnd.get_price_from_curve(curve) - bnd.price) ** 2
+        for bond, wi in self._bonds:
+            if wi > 0:
+                err += wi * (bond.get_price_from_curve(curve) - bond.price) ** 2
         # n_dates = [self.date] + [nd.date for nd in curve.nodes]
         # r_values = [curve.get_forward_rate(n_dates[n_id], n_dates[n_id+1]) for n_id in range(len(values))]
         # for r_id in range(1, len(r_values)):
@@ -117,11 +116,13 @@ class BondCurveModelNP(BondCurveModel):
         curve.update_nodes(log_values=values)
         error_primes = np.zeros(len(values), dtype=float)
         nodes = [RateCurveNode(self.date, 1)] + curve.nodes
-        for bnd in self.bonds:
-            price_error = bnd.get_price_from_curve(curve) - bnd.price
+        for bond, wi in self._bonds:
+            if not wi > 0:
+                continue
+            price_error = wi * (bond.get_price_from_curve(curve) - bond.price)
             price_prime = np.zeros(len(values), dtype=float)
             n_id = 0
-            for cshf in bnd.cashflows:
+            for cshf in bond.cashflows:
                 cshf_pv = cshf.amount * curve.get_df(cshf.date)
                 if cshf.date > nodes[n_id+1].date:
                     n_id += 1
@@ -142,7 +143,9 @@ class BondCurveModelNP(BondCurveModel):
         return True
     
     def build(self):
-        base_curve = self.base_curve
+        wsum = sum(wi for _, wi in self._bonds)
+        self._bonds = [(bond, wi/wsum) for bond, wi in self._bonds]
+        base_curve = self.base_curve()
         base_date = base_curve.date
         nodes = [(Tenor(ndt).get_date(base_date), 1) for ndt in self.node_tenors]
         self.spread_curve = SpreadCurve(base_date, nodes, base_curve,
@@ -157,7 +160,7 @@ class BondCurveModelNP(BondCurveModel):
         bond_measures = []
         curve = get_rate_curve(self._base_curve, self.date)
         yield_method = BondYieldMethod()
-        for bnd in self.bonds:
+        for bnd, _ in self._bonds:
             date = bnd.maturity_date
             bond_measures.append([
                 date,

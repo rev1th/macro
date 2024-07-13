@@ -8,6 +8,7 @@ import pandas as pd
 from lib import plotter
 from volatility.lib import plotter as vol_plotter
 from volatility.models.vol_types import VolSurfaceType
+from models.bond_curve_types import BondCurveWeightType
 import main
 
 
@@ -15,25 +16,17 @@ _GRAPH_STYLE = {'height': '100vh'}
 _TABLE_KWARGS = dict(sort_action='native', sort_mode='multi', sort_by=[],
                 filter_action='native')
 _DIV_STYLE = {'textAlign': 'center'}
-_GRID_DEFS = {
-    'percentage': {
-        'baseDataType': 'number',
-        'extendsDataType': 'number',
-        'valueFormatter': {
-            'function': "params.value == null ? '' :  d3.format(',.3%')(params.value)"
-        },
-    },
+_AGGRID_OPTIONS = {
+    'pagination': True, 'paginationPageSize': 50, 'animateRows': False,
 }
-_GRID_OPTIONS = {
-    'pagination':True, 'paginationPageSize': 50,
-    'animateRows': False, 'dataTypeDefinitions': _GRID_DEFS,
-}
-_GRID_KWARGS = dict(
+_AGGRID_KWARGS = dict(
     defaultColDef = {'filter': True},
     columnSize='sizeToFit',
-    dashGridOptions=_GRID_OPTIONS,
+    dashGridOptions=_AGGRID_OPTIONS,
     style={'height': 900},
 )
+def get_grid_format(fmt: str):
+    return {'function': f"params.value == null ? '' :  d3.format('{fmt}')(params.value)"}
 
 app = Dash(__name__)
 app.layout = html.Div([
@@ -44,7 +37,7 @@ app.layout = html.Div([
             id='val-date-picker',
             clearable=True,
         ),
-        html.Button('Reload Rates Curves', id='load_rates'),
+        html.Button('Reload Rates Curves', id='load_rates_curves'),
         dcc.Loading(
             id='rates-curves-status',
             type='default',
@@ -52,7 +45,7 @@ app.layout = html.Div([
     ], style=_DIV_STYLE),
     dcc.Tabs(children=[
         dcc.Tab(children=html.Div([
-            dcc.Dropdown(['USD', 'CNY'], value=['USD', 'CNY'], multi=True, id='rates-ccy-dropdown'),
+            dcc.Dropdown(['USD', 'CNY'], multi=True, id='rates-ccy-dropdown'),
             html.Div(id='rates-curves'),
         ]), label='Rates'),
         dcc.Tab(children=html.Div([
@@ -64,7 +57,12 @@ app.layout = html.Div([
             html.Div(id='bond-futures'),
         ], style=_DIV_STYLE), label='Bond Futures'),
         dcc.Tab(children=html.Div([
-            html.Button('Reload Bonds Curves', id='load_bonds'),
+            html.Div([
+                html.Div([
+                    dcc.Dropdown([bcwt.value for bcwt in BondCurveWeightType], id='bonds-weight-dropdown')
+                ], style={'width': '15%'}),
+                html.Button('Reload Bonds Curves', id='load_bonds_curves'),
+            ], style={'justifyContent': 'center', 'display': 'flex'}),
             dcc.Loading(
                 id='bonds-curves-status',
                 type='default',
@@ -73,7 +71,9 @@ app.layout = html.Div([
         ], style=_DIV_STYLE), label='Bonds'),
         dcc.Tab(children=html.Div([
             html.Div([
-                html.Div([dcc.Dropdown([vst.value for vst in VolSurfaceType], id='vol-type-dropdown')], style={'width': '15%'}),
+                html.Div([
+                    dcc.Dropdown([vst.value for vst in VolSurfaceType], id='vol-type-dropdown')
+                ], style={'width': '15%'}),
                 html.Button('Reload Vol Curves', id='load_vols'),
             ], style={'justifyContent': 'center', 'display': 'flex'}),
             dcc.Loading(
@@ -100,10 +100,10 @@ def refresh_date(*_):
     Output(component_id='rates-curves-status', component_property='children'),
     Input(component_id='val-date-picker', component_property='start_date'),
     Input(component_id='val-date-picker', component_property='end_date'),
-    Input(component_id='load_rates', component_property='n_clicks'),
-    running=[(Output(component_id='load_bonds', component_property='disabled'), True, False)],
+    Input(component_id='load_rates_curves', component_property='n_clicks'),
+    # running=[(Output(component_id='load_bonds_curves', component_property='disabled'), True, False)],
 )
-def load_rates(start_date_str: str, end_date_str: str, *_):
+def load_rates_curves(start_date_str: str, end_date_str: str, *_):
     start_date = dtm.date.fromisoformat(start_date_str) if start_date_str else None
     end_date = dtm.date.fromisoformat(end_date_str) if end_date_str else None
     try:
@@ -134,14 +134,15 @@ def load_rates(start_date_str: str, end_date_str: str, *_):
     Output(component_id='bonds-curves-status', component_property='children'),
     State(component_id='val-date-picker', component_property='end_date'),
     # Input(component_id='rates-curves', component_property='children'),
-    Input(component_id='load_bonds', component_property='n_clicks'),
+    Input(component_id='bonds-weight-dropdown', component_property='value'),
+    Input(component_id='load_bonds_curves', component_property='n_clicks'),
     prevent_initial_call=True,
 )
-def load_bonds(date_str: str, *_):
+def load_bonds_curves(date_str: str, weight_type: str, *_):
     value_date = dtm.date.fromisoformat(date_str) if date_str else None
     b_tabvals = []
     try:
-        for bcm in main.evaluate_bonds_curves(value_date):
+        for bcm in main.evaluate_bonds_curves(value_date, weight_type=weight_type):
             fig = plotter.get_bonds_curve_figure(*bcm.get_graph_info())
             b_tabvals.append(dcc.Tab(children=[
                 dcc.Graph(figure=fig, style=_GRAPH_STYLE),
@@ -173,15 +174,15 @@ def recalc_bonds(trade_date_str: str, curve_date_str: str):
     curve_date = dtm.date.fromisoformat(curve_date_str) if curve_date_str else None
     try:
         measures_df = main.evaluate_bonds_roll(curve_date, trade_date)
-        columns = [dict(id=col, name=col) for col in measures_df.columns]
+        columns = [dict(field=col) for col in measures_df.columns]
         for col in columns:
-            if col['name'] == 'Yield':
-                col.update(dict(type='numeric', format=dash_table.FormatTemplate.percentage(3)))
-            elif col['name'].endswith('Price'):
-                col.update(dict(type='numeric', format=dict(specifier='.4f')))
-        patched_table = dash_table.DataTable(
-            data=measures_df.to_dict('records'), columns=columns,
-            page_size=50, editable=True, **_TABLE_KWARGS
+            if col['field'] == 'Yield':
+                col.update(dict(valueFormatter=get_grid_format(',.3%')))
+            elif col['field'].endswith('Price'):
+                col.update(dict(valueFormatter=get_grid_format(',.6f')))
+        patched_table = dag.AgGrid(
+            rowData=measures_df.to_dict('records'), columnDefs=columns,
+            **_AGGRID_KWARGS
         )
         return patched_table, None
     except Exception as ex:
@@ -200,10 +201,10 @@ def load_bond_futures(date_str: str, *_):
         columns = [dict(field=col) for col in measures_df.columns]
         for col in columns:
             if 'Repo' in col['field']:
-                col.update(dict(cellDataType='percentage'))
+                col.update(dict(valueFormatter=get_grid_format(',.3%')))
         table = dag.AgGrid(
             rowData=measures_df.to_dict('records'), columnDefs=columns,
-            **_GRID_KWARGS
+            **_AGGRID_KWARGS
         )
         return table, None
     except Exception as ex:

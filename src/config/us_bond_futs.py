@@ -68,6 +68,6 @@ def construct(value_date = None):
     if not value_date:
         value_date = last_settle_date
     bond_date = min(value_date, last_settle_date)
-    bond_universe = [b for b in us_bonds.get_bond_model(bond_date).bonds if isinstance(b, FixCouponBond)]
+    bond_universe = [b for b in us_bonds.get_bond_model(bond_date).bonds() if isinstance(b, FixCouponBond)]
     contracts = [get_contracts(value_date, bond_universe, code) for code in FUTPROD_TENORS]
     return BondFutureModel(value_date, [c for cs in contracts for c in cs], 'USD-SOFR')
