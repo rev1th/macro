@@ -82,7 +82,7 @@ def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.d
     return swap_instruments
 
 def get_meeting_dates(val_date: dtm.date, effective_t = date_lib.Tenor('1B')) -> list[dtm.date]:
-    meeting_dates = data_parser.read_meeting_dates()
+    meeting_dates = data_parser.read_meeting_dates('FED')
     # meeting_dates.sort()
     meeting_dates_eff = [effective_t.get_date(dt) for dt in meeting_dates if dt >= val_date]
     return meeting_dates_eff
@@ -106,17 +106,18 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
 
 def _init():
     global _SOFR_RATES, _FF_RATES, _SOFR_IMM_CONTRACTS, _SOFR_SERIAL_CONTRACTS, _FF_SERIAL_CONTRACTS, _INITIALIZED
-    _SOFR_RATES = data_parser.read_fixings(filename='SOFR.csv', date_col='Effective Date', rate_col='Rate (%)')
-    _FF_RATES = data_parser.read_fixings(filename='EFFR.csv', date_col='Effective Date', rate_col='Rate (%)')
-    _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(filename='SR3.csv', underlying='SOFR')
-    _SOFR_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='SR1.csv', underlying='SOFR')
-    _FF_SERIAL_CONTRACTS = data_parser.read_serial_futures(filename='FF.csv', underlying='EFFR')
+    first_date = date_lib.Tenor('-3m').get_date(dtm.date.today())
+    _SOFR_RATES = data_parser.read_fixings(code='SOFR', from_date=first_date)
+    _FF_RATES = data_parser.read_fixings(code='EFFR', from_date=first_date)
+    _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(code='SR3')
+    _SOFR_SERIAL_CONTRACTS = data_parser.read_serial_futures(code='SR1')
+    _FF_SERIAL_CONTRACTS = data_parser.read_serial_futures(code='FF')
     
     for fc in [_SOFR_RATES, _FF_RATES]:
         add_fixing_curve(fc)
     
-    for k, v in data_parser.read_swap_conventions().items():
-        add_swap_convention(*k, v)
+    for row in data_parser.read_swap_conventions():
+        add_swap_convention(row)
 
     _INITIALIZED = True
 

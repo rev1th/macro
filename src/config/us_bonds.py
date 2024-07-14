@@ -7,16 +7,14 @@ import data_api.treasury as td_api
 from models.bond_curve_builder import BondCurveModelNS, BondCurveModelNP
 from models.bond_curve_types import BondCurveWeightType
 
-MIN_TENOR_BOND = date_lib.Tenor('6m')
-MIN_TENOR_BILL = date_lib.Tenor('1m')
+MIN_TENOR = date_lib.Tenor('1m')
 CUSIP_COL, TYPE_COL, RATE_COL, MATURITY_COL, BUY_COL, SELL_COL, CLOSE_COL = (
     td_api.COL_NAMES[id] for id in [0, 1, 2, 3, -3, -2, -1])
 
 def construct(value_date: dtm.date = None, include_term: bool = False, weight_type = BondCurveWeightType.OTR):
     if not value_date:
         value_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=date_lib.Calendar.USEX)
-    min_maturity_bond = MIN_TENOR_BOND.get_date(value_date)
-    min_maturity_bill = MIN_TENOR_BILL.get_date(value_date)
+    min_maturity = MIN_TENOR.get_date(value_date)
     trade_date, settle_date = value_date, None
     bonds_price = td_api.load_bonds_price(value_date)
     if sum(bonds_price[CLOSE_COL]) == 0:
@@ -36,26 +34,26 @@ def construct(value_date: dtm.date = None, include_term: bool = False, weight_ty
                 price = (b_r[BUY_COL] + b_r[SELL_COL])/2
         else:
             price = b_r[CLOSE_COL]
-        if weight_type == BondCurveWeightType.Equal:
+        if b_r[BUY_COL] == b_r[SELL_COL]:
             weight = 1
         else:
-            if b_r[BUY_COL] == b_r[SELL_COL]:
-                weight = 1
-            else:
-                if weight_type == BondCurveWeightType.BidAsk and b_r[BUY_COL] > 0:
+            if b_r[BUY_COL] > 0:
+                if weight_type == BondCurveWeightType.BidAsk:
                     weight = 1e-4 / (b_r[BUY_COL] - b_r[SELL_COL])
+                elif weight_type == BondCurveWeightType.Equal:
+                    weight = 1
                 else:
                     weight = 0
-        if b_type == 'BILL':
-            if mat_date < min_maturity_bill:
+            else:
                 weight = 0
+        if mat_date < min_maturity:
+            continue
+        if b_type == 'BILL':
             bill_obj = ZeroCouponBond(mat_date, name=cusip, #_daycount_type=date_lib.DayCount.ACT360,
                                     _settle_delay=settle_delay)
             bill_obj.set_market(settle_date, price, trade_date=trade_date)
             bills_list.append((bill_obj, weight))
         elif b_type in ('NOTE', 'BOND'):
-            if mat_date < min_maturity_bond:
-                weight = 0
             if include_term and cusip in bonds_term:
                 term_years = int(bonds_term[cusip].split('-')[0])
             else:

@@ -14,11 +14,14 @@ def evaluate_rates_curves(start_date = None, end_date = None):
         ycg_usd_dt = usd_rc.construct(date)
         ycg_usd_dt.build(calibrate_convexity=True)
         ycg_usd.append(ycg_usd_dt)
+    res = [ycg_usd]
 
     ycg_cny = cny_rc.construct()
-    ycg_cny.build()
+    for ycg_cny_i  in ycg_cny:
+        ycg_cny_i.build()
+    res.append(ycg_cny)
 
-    return [ycg_usd, [ycg_cny]]
+    return res
 
 _CACHED_DATA = {}
 def evaluate_bonds_curves(value_date = None, **kwargs):

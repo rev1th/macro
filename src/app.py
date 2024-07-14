@@ -18,6 +18,7 @@ _TABLE_KWARGS = dict(sort_action='native', sort_mode='multi', sort_by=[],
 _DIV_STYLE = {'textAlign': 'center'}
 _AGGRID_OPTIONS = {
     'pagination': True, 'paginationPageSize': 50, 'animateRows': False,
+    'enableCellTextSelection': True,
 }
 _AGGRID_KWARGS = dict(
     defaultColDef = {'filter': True},
@@ -25,6 +26,7 @@ _AGGRID_KWARGS = dict(
     dashGridOptions=_AGGRID_OPTIONS,
     style={'height': 900},
 )
+_FORM_STYLE = {'justifyContent': 'center', 'display': 'flex'}
 def get_grid_format(fmt: str):
     return {'function': f"params.value == null ? '' :  d3.format('{fmt}')(params.value)"}
 
@@ -62,7 +64,7 @@ app.layout = html.Div([
                     dcc.Dropdown([bcwt.value for bcwt in BondCurveWeightType], id='bonds-weight-dropdown')
                 ], style={'width': '15%'}),
                 html.Button('Reload Bonds Curves', id='load_bonds_curves'),
-            ], style={'justifyContent': 'center', 'display': 'flex'}),
+            ], style=_FORM_STYLE),
             dcc.Loading(
                 id='bonds-curves-status',
                 type='default',
@@ -75,7 +77,7 @@ app.layout = html.Div([
                     dcc.Dropdown([vst.value for vst in VolSurfaceType], id='vol-type-dropdown')
                 ], style={'width': '15%'}),
                 html.Button('Reload Vol Curves', id='load_vols'),
-            ], style={'justifyContent': 'center', 'display': 'flex'}),
+            ], style=_FORM_STYLE),
             dcc.Loading(
                 id='vol-curves-status',
                 type='default',

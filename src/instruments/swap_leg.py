@@ -5,7 +5,6 @@ from typing import ClassVar
 from abc import abstractmethod
 import datetime as dtm
 
-from common.chrono import Tenor
 from instruments.swap_convention import SwapLegConvention, SwapFloatLegConvention
 from instruments.rate_curve import RateCurve
 
@@ -13,25 +12,13 @@ from instruments.rate_curve import RateCurve
 @dataclass
 class SwapLeg:
     _convention: SwapLegConvention
-    _start: Tenor
-    _end: Tenor
     _notional: float
     _units: float = 1
-    
-    _value_date: dtm.date = field(init=False, default=None)
 
     _start_date: ClassVar[dtm.date]
     _end_date: ClassVar[dtm.date]
     coupon_dates: ClassVar[list[dtm.date]]
     coupon_pay_dates: ClassVar[list[dtm.date]]
-    
-    @property
-    def start_date(self) -> dtm.date:
-        return self._start_date
-    
-    @property
-    def end_date(self) -> dtm.date:
-        return self._end_date
     
     @property
     def notional(self) -> float:
@@ -44,14 +31,13 @@ class SwapLeg:
     def get_dcf(self, from_date: dtm.date, to_date: dtm.date) -> float:
         return self._convention.daycount_type.get_dcf(from_date, to_date)
     
-    def set_market(self, date: dtm.date) -> None:
-        self._value_date = date
-        self._start_date = self._start.get_date(self._convention.spot_delay.get_date(self._value_date))
+    def set_market(self, start_date: dtm.date, end_date: dtm.date) -> None:
+        self._start_date, self._end_date = start_date, end_date
         self.coupon_dates = self._convention.coupon_frequency.generate_schedule(
-            self.start_date, self._end.get_date(self._start_date),
-            bd_adjust=self._convention.coupon_adjust)
-        self._end_date = self.coupon_dates[-1]
-        self.coupon_pay_dates = [self._convention.coupon_pay_delay.get_date(rd) for rd in self.coupon_dates]
+            self._start_date, end_date,
+            bd_adjust=self._convention.coupon_adjust())
+        pay_delay = self._convention.coupon_pay_delay()
+        self.coupon_pay_dates = [pay_delay.get_date(rd) for rd in self.coupon_dates]
     
     @abstractmethod
     def get_pv(self) -> float:
@@ -59,7 +45,7 @@ class SwapLeg:
 
     def get_annuity(self, discount_curve: RateCurve) -> float:
         annuity = 0
-        accrual_start_date = self.start_date
+        accrual_start_date = self._start_date
         for cp_i in range(len(self.coupon_dates)):
             cp_d_i = self.coupon_dates[cp_i]
             cp_pd_i = self.coupon_pay_dates[cp_i]
@@ -71,17 +57,17 @@ class SwapLeg:
 class SwapFixLeg(SwapLeg):
     _rate: float = field(init=False)
     
-    def set_market(self, date: dtm.date, rate: float = 0) -> None:
-        super().set_market(date)
+    def set_market(self, start_date: dtm.date, end_date: dtm.date, rate: float = 0) -> None:
+        super().set_market(start_date, end_date)
         self._rate = rate
 
     def get_pv(self, discount_curve: RateCurve) -> float:
         pv = 0
         if self.notional_exchange.initial:
-            pv += self.notional * discount_curve.get_df(self.start_date)
+            pv += self.notional * discount_curve.get_df(self._start_date)
         pv += self.get_annuity(discount_curve=discount_curve) * self._rate * self._units
         if self.notional_exchange.final:
-            pv += self.notional * discount_curve.get_df(self.end_date)
+            pv += self.notional * discount_curve.get_df(self._end_date)
         return pv
 
 @dataclass
@@ -95,25 +81,25 @@ class SwapFloatLeg(SwapLeg):
     def fixing(self):
         return self._convention.fixing
 
-    def set_market(self, date: dtm.date, spread: float = 0) -> None:
-        super().set_market(date)
+    def set_market(self, start_date: dtm.date, end_date: dtm.date, spread: float = 0) -> None:
+        super().set_market(start_date, end_date)
         self._spread = spread
-        accrual_dates = [self.start_date] + self.coupon_dates
+        accrual_dates = [self._start_date] + self.coupon_dates
         fixing_periods = [[] for _ in range(len(self.coupon_dates))]
+        fixing_lag = self._convention.fixing_lag()
         if self._convention.is_interim_reset():
             reset_freq = self._convention.reset_frequency
             for a_id in range(1, len(accrual_dates)):
                 reset_dates = reset_freq.generate_schedule(
                     accrual_dates[a_id-1], accrual_dates[a_id],
-                    roll_backward=False, bd_adjust=self._convention.coupon_adjust)
-                fixing_dates = [self._convention.fixing_lag.get_date(rd) for rd in reset_dates]
+                    roll_backward=False, bd_adjust=self._convention.coupon_adjust())
+                fixing_dates = [fixing_lag.get_date(rd) for rd in reset_dates]
                 for f_id in range(1, len(fixing_dates)):
                     fixing_periods[a_id-1].append((
                         (fixing_dates[f_id-1], fixing_dates[f_id]),
                         (reset_dates[f_id-1], reset_dates[f_id])))
-
         else:
-            fixing_dates = [self._convention.fixing_lag.get_date(ad) for ad in accrual_dates]
+            fixing_dates = [fixing_lag.get_date(ad) for ad in accrual_dates]
             for f_id in range(1, len(fixing_dates)):
                 fixing_periods[f_id-1].append((
                     (fixing_dates[f_id-1], fixing_dates[f_id]),
@@ -125,7 +111,7 @@ class SwapFloatLeg(SwapLeg):
             forward_curve = discount_curve
         pv = 0
         if self.notional_exchange.initial:
-            pv += self.notional * discount_curve.get_df(self.start_date)
+            pv += self.notional * discount_curve.get_df(self._start_date)
         for cp_i in range(len(self.coupon_dates)):
             forecast_rate = 0
             for fix_i in self.fixing_periods[cp_i]:
@@ -135,5 +121,5 @@ class SwapFloatLeg(SwapLeg):
             pv += self.notional * (forecast_rate + self._spread * self._units) * \
                     discount_curve.get_df(self.coupon_pay_dates[cp_i])
         if self.notional_exchange.final:
-            pv += self.notional * discount_curve.get_df(self.end_date)
+            pv += self.notional * discount_curve.get_df(self._end_date)
         return pv

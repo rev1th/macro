@@ -33,9 +33,9 @@ def get_tenor(term: float):
 def get_contracts(value_date, bond_universe: list[FixCouponBond], code: str = 'TN') -> list[BondFuture]:
     min_term, max_term, original_term, factor_params, price_params = FUTPROD_TENORS[code]
     min_tenor, max_tenor = get_tenor(min_term), get_tenor(max_term) if max_term else None
-    listed_bond_futs = data_parser.read_bond_futures(filename=f'{code}.csv',
+    listed_bond_futs = data_parser.read_bond_futures(code=code,
                         min_tenor=min_tenor, max_tenor=max_tenor,
-                        original_term=original_term, _factor_params=factor_params)
+                        _original_term=original_term, _factor_params=factor_params)
     _, futures_prices = cme_api.load_fut_settle_prices(code, value_date, price_params)
     bond_futs = []
     for ins in listed_bond_futs:

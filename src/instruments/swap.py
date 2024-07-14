@@ -25,6 +25,8 @@ class SwapCommon(BaseInstrument):
     _start: Tenor = field(default_factory=Tenor.bday)
 
     _convention: ClassVar[SwapConvention]
+    _start_date: ClassVar[dtm.date]
+    _end_date: ClassVar[dtm.date]
     _leg1: ClassVar[SwapLeg] = None
     _leg2: ClassVar[SwapLeg] = None
     
@@ -34,24 +36,20 @@ class SwapCommon(BaseInstrument):
         self._convention = get_swap_convention(self._convention_name)
     
     @property
-    def convention_name(self) -> str:
-        return self._convention_name
-
-    @property
     def end(self):
         return self._end
     
     @property
-    def end_date(self) -> dtm.date:
-        return self._leg1.end_date
+    def end_date(self):
+        return self._end_date
 
     @property
     def start(self):
         return self._start
     
     @property
-    def start_date(self) -> dtm.date:
-        return self._leg1.start_date
+    def start_date(self):
+        return self._start_date
 
     @property
     def notional(self) -> float:
@@ -63,8 +61,10 @@ class SwapCommon(BaseInstrument):
     
     def set_market(self, date: dtm.date, rate1: float = 0, rate2: float = 0) -> None:
         super().set_market(date)
-        self._leg1.set_market(date, rate1)
-        self._leg2.set_market(date, rate2)
+        self._start_date = self._start.get_date(self._convention.spot_delay().get_date(self._value_date))
+        self._end_date = self._end.get_date(self._start_date)
+        self._leg1.set_market(self._start_date, self._end_date, rate1)
+        self._leg2.set_market(self._start_date, self._end_date, rate2)
     
     @abstractmethod
     def get_par(self, _: RateCurve) -> float:
@@ -95,8 +95,8 @@ class DomesticSwap(SwapCommonC):
     def __post_init__(self):
         super().__post_init__()
         assert self._fix_leg_id in (1, 2), f"Invalid fix leg specified {self._fix_leg_id}"
-        self._fix_leg = SwapFixLeg(self.convention.leg1, self._start, self._end, self.notional, _units=self._units)
-        self._float_leg = SwapFloatLeg(self.convention.leg2, self._start, self._end, -self.notional)
+        self._fix_leg = SwapFixLeg(self.convention.leg1, self.notional, _units=self._units)
+        self._float_leg = SwapFloatLeg(self.convention.leg2, -self.notional)
         if self._fix_leg_id == 1:
             self._leg1, self._leg2 = self._fix_leg, self._float_leg
         else:
@@ -142,8 +142,8 @@ class BasisSwap(SwapCommonC):
     def __post_init__(self):
         super().__post_init__()
         assert self._spread_leg_id in (1, 2), f"Invalid spread leg specified {self._spread_leg_id}"
-        self._leg1 = SwapFloatLeg(self.convention.leg1, self._start, self._end, self.notional, _units=self._units)
-        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start, self._end, -self.notional, _units=self._units)
+        self._leg1 = SwapFloatLeg(self.convention.leg1, self.notional, _units=self._units)
+        self._leg2 = SwapFloatLeg(self.convention.leg2, -self.notional, _units=self._units)
         if self._spread_leg_id == 1:
             self._spread_leg = self._leg1
         else:

@@ -4,8 +4,9 @@ import pandas as pd
 import logging
 import argparse
 
-from common import request_web as request, io
+from common import request_web as request
 from common.models.data import DataPointType
+from data_api import sql
 
 logger = logging.Logger(__name__)
 
@@ -74,20 +75,64 @@ FUTPRODID_MAP = {
     # 'TWE': '10072', #19 2/12 - 19 11/12
     'UB': '3141',
 }
-FUTPROD_COLUMNS = ['productCode', 'contractMonth', 'firstTrade', 'lastTrade', 'settlement']
-# ['firstPosition', 'lastPosition', 'firstNotice', 'firstDelivery', 'lastDelivery']
-def load_futures_list(code: str):
+
+FUT_TABLE = 'futures'
+FUTPROD_TABLE = 'futures_contracts'
+BONDFUTPROD_TABLE = 'bond_futures_contracts'
+FUTPROD_DATE_FORMAT = '%d %b %Y'
+
+def update_futures_list(code: str):
     fut_url = FUTPROD_URL.format(code=FUTPRODID_MAP[code])
     content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
-    content_df = pd.DataFrame(content_json)[FUTPROD_COLUMNS]
-    content_df.set_index(FUTPROD_COLUMNS[0], inplace=True)
-    for col in FUTPROD_COLUMNS[2:]:
-        content_df[col] = pd.to_datetime(content_df[col], format='%d %b %Y')
-    filename = io.get_path(code, format='csv')
-    content_df.to_csv(filename, date_format=DATE_FORMAT)
-    logger.info(f"Saved {filename}")
-    
-    return content_df
+    content_df = pd.DataFrame(content_json)
+    for _, row in content_df.iterrows():
+        insert_query = f"""INSERT OR IGNORE INTO {FUTPROD_TABLE} VALUES (
+    '{row['productCode']}', '{code}', '{row['contractMonth']}',
+    '{dtm.datetime.strptime(row['firstTrade'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['lastTrade'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['settlement'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}'
+)"""
+        sql.modify_query(insert_query)
+    return True
+
+def update_bond_futures_list(code: str):
+    fut_url = FUTPROD_URL.format(code=FUTPRODID_MAP[code])
+    content_json = request.get_json(request.url_get(fut_url, headers=HEADERS))
+    content_df = pd.DataFrame(content_json)
+    for _, row in content_df.iterrows():
+        insert_query = f"""INSERT OR IGNORE INTO {BONDFUTPROD_TABLE} VALUES (
+    '{row['productCode']}', '{code}', '{row['contractMonth']}',
+    '{dtm.datetime.strptime(row['firstTrade'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['lastTrade'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['firstPosition'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['lastPosition'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['firstNotice'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['firstDelivery'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+    '{dtm.datetime.strptime(row['lastDelivery'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}'
+)"""
+        sql.modify_query(insert_query)
+    return True
+
+def get_futures_contracts(code: str):
+    contracts_query = f"""SELECT contract_code, last_trade_date, settlement_date
+    FROM {FUTPROD_TABLE} WHERE future_code='{code}'"""
+    contracts_list = sql.fetch_query(contracts_query)
+    underlier_query = f"SELECT underlier_code FROM {FUT_TABLE} WHERE future_code='{code}'"
+    underlier = sql.fetch_query(underlier_query, count=1)[0]
+    contracts_list = sql.fetch_query(contracts_query)
+    contracts_fmt = [(row[0], dtm.datetime.strptime(row[1], sql.DATE_FORMAT).date(),
+                    dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date(), underlier) for row in contracts_list]
+    return contracts_fmt
+
+def get_bond_futures_contracts(code: str):
+    contracts_query = f"""SELECT contract_code, last_trade_date, first_delivery_date, last_delivery_date
+    FROM {BONDFUTPROD_TABLE} WHERE future_code='{code}'"""
+    contracts_list = sql.fetch_query(contracts_query)
+    contracts_fmt = [(row[0], dtm.datetime.strptime(row[1], sql.DATE_FORMAT).date(),
+                    dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date(),
+                    dtm.datetime.strptime(row[3], sql.DATE_FORMAT).date()
+                    ) for row in contracts_list]
+    return contracts_fmt
 
 def request_get_retry(url: str, max_tries: int = 3):
     try:
@@ -185,61 +230,60 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     for fut in args.futures.split(','):
-        load_futures_list(fut)
+        update_futures_list(fut)
     # load_swap_data()
-    # op = load_prices_ftp()
-    # for key, val in op.items():
-    #     for key2, val2 in val.items():
-    #         print(key, key2, val2)
 
-# import urllib.request as urlreq
-# FTP_URL = 'ftp://ftp.cmegroup.com/pub/settle/stlint_v2'
-# # ['MONTH','OPEN','HIGH','LOW','LAST','SETT','CHGE','EST.VOL','P_SETT','P_VOL','P_INT']
-# COLUMNS_TO_READ = ['MONTH','OPEN','HIGH','LOW','LAST','SETT','CHGE']
-# PRICE_MAP = {
-#     'SOFR': 'SOFR Futures',
-#     'FF': 'Federal Fund Futures',
-# }
-# # Inspired by https://gist.github.com/tristanwietsma/5486236
-# def load_prices_ftp(contract_type: str = 'SOFR Futures'):
-#     with urlreq.urlopen(FTP_URL, timeout=request.TIMEOUT_SECS) as u:
-#         lines = u.readlines()
-#         if lines[0]:
-#             li = lines[0].strip()
-#             logger.info(li)
-#             lines.pop(0)
-#             header = li.decode(ENCODE_FORMAT).split()
-#             price_date = dtm.datetime.strptime(header[5], DATE_FORMAT).date()
-    
-#     res: dict[str, dict[str, float]] = {}
-#     key = None
-#     contract_suffix = PRICE_MAP[contract_type].encode(ENCODE_FORMAT)
-#     for li in lines:
-#         li = li.strip()
-#         if not li:
-#             key = None
-#             continue
-#         if li.endswith(contract_suffix):
-#             desc = li.decode(ENCODE_FORMAT).split()
-#             logger.info(f"Adding {' '.join(desc[1:])}")
-#             key = desc[0]
-#             if key in res:
-#                 raise Exception(f'Found duplciate key for {key}')
-#             res[key] = {}
-#             continue
-#         if key:
-#             cells = li.decode(ENCODE_FORMAT).split()
-#             if cells[0] == 'TOTAL':
-#                 key = None
-#                 continue
-#             if len(cells) < len(COLUMNS_TO_READ):
-#                 raise Exception(f'Invalid data for {key}')
-#             cells = cells[:len(COLUMNS_TO_READ)]
-#             try:
-#                 contract_month = get_month_code(cells[0][:3]) + cells[0][3:]
-#                 settle_price = float(cells[-2])
-#             except:
-#                 key = None
-#                 continue
-#             res[key][contract_month] = settle_price
-#     return (price_date, res)
+# create_query = f"""CREATE TABLE {FUT_TABLE} (
+#     future_code TEXT, underlier_code TEXT,
+#     CONSTRAINT futures_pk PRIMARY KEY (future_code)
+# )"""
+# sql.modify_query(create_query)
+# for row in [('SR1', 'SOFR'), ('SR3', 'SOFR'), ('FF', 'EFFR')]:
+#     insert_query = f"INSERT INTO {FUT_TABLE} VALUES ('{row[0]}', '{row[1]}')"
+#     sql.modify_query(insert_query)
+
+# create_query = f"""CREATE TABLE {FUTPROD_TABLE} (
+#     contract_code TEXT, future_code TEXT, contract_month TEXT,
+#     first_trade_date TEXT, last_trade_date TEXT, settlement_date TEXT,
+#     CONSTRAINT {FUTPROD_TABLE}_pk PRIMARY KEY (contract_code)
+# )"""
+# sql.modify_query(create_query)
+# for file in ['FF.csv', 'SR1.csv', 'SR3.csv']:
+#     if file.startswith('SR'):
+#         underlier = 'SOFR'
+#     else:
+#         underlier = 'EFFR'
+#     fcode = file.split('.')[0]
+#     df = pd.read_csv(f'data/{file}')
+#     for _, row in df.iterrows():
+#         insert_query = f"""INSERT INTO {FUTPROD_TABLE} VALUES (
+#     '{row['productCode']}', '{fcode}', '{row['contractMonth']}',
+#     '{dtm.datetime.strptime(row['firstTrade'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['lastTrade'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['settlement'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}'
+# )"""
+#         sql.modify_query(insert_query)
+
+# create_query = f"""CREATE TABLE {BONDFUTPROD_TABLE} (
+#     contract_code TEXT, future_code TEXT, contract_month TEXT,
+#     first_trade_date TEXT, last_trade_date TEXT,
+#     first_position_date TEXT, last_position_date TEXT, first_notice_date TEXT,
+#     first_delivery_date TEXT, last_delivery_date TEXT,
+#     CONSTRAINT {BONDFUTPROD_TABLE}_pk PRIMARY KEY (contract_code)
+# )"""
+# sql.modify_query(create_query)
+# for file in ['TN.csv', 'UB.csv', 'ZB.csv', 'ZF.csv', 'ZN.csv', 'ZT.csv']:
+#     fcode = file.split('.')[0]
+#     df = pd.read_csv(f'data/{file}')
+#     for _, row in df.iterrows():
+#         insert_query = f"""INSERT INTO {BONDFUTPROD_TABLE} VALUES (
+#     '{row['productCode']}', '{fcode}', '{row['contractMonth']}',
+#     '{dtm.datetime.strptime(row['firstTrade'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['lastTrade'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['firstPosition'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['lastPosition'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['firstNotice'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['firstDelivery'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}',
+#     '{dtm.datetime.strptime(row['lastDelivery'], DATE_FORMAT).strftime(sql.DATE_FORMAT)}'
+# )"""
+#         sql.modify_query(insert_query)

@@ -29,7 +29,7 @@ def construct():
     bd_adjust = BDayAdjust(BDayAdjustType.Following, calendar)
 
     value_date, vol_quotes = get_fx_vols()
-    fx_curve = get_rate_curve('CNY-OIS', value_date)
+    fx_curve = get_rate_curve('CNY-USD', value_date)
     vol_data = {}
     for t, quotes in vol_quotes.items():
         expiry_date = Tenor(t).get_date(value_date, bd_adjust)
