@@ -8,11 +8,11 @@ import pandas as pd
 import datetime as dtm
 
 from common.base_class import NameDateClass
-from common.chrono import Tenor
+from common.chrono.tenor import Tenor
 from common.numeric import solver
 from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
 from instruments.bond import Bond, BondYieldMethod
-from models.rate_curve_builder import get_rate_curve
+import models.rate_curve_builder as rcb
 
 logger = logging.Logger(__name__)
 
@@ -24,7 +24,7 @@ class BondCurveModel(NameDateClass):
     _bonds: list[tuple[Bond, float]]
     
     def base_curve(self):
-        return get_rate_curve(self._base_curve, self.date)
+        return rcb.get_rate_curve(self._base_curve, self.date)
     
     def bonds(self):
         return [br[0] for br in self._bonds]
@@ -158,7 +158,7 @@ class BondCurveModelNP(BondCurveModel):
     
     def get_graph_info(self):
         bond_measures = []
-        curve = get_rate_curve(self._base_curve, self.date)
+        curve = rcb.get_rate_curve(self._base_curve, self.date)
         yield_method = BondYieldMethod()
         for bnd, _ in self._bonds:
             date = bnd.maturity_date

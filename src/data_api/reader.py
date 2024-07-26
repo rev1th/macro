@@ -1,15 +1,13 @@
 import datetime as dtm
-import pandas as pd
 from sortedcontainers import SortedDict
 
-from common import io
-from common.chrono import Tenor
 from data_api import nyfed, cme
 from instruments.fixing import Fixing, FixingCurve
 from instruments.rate_future import RateFutureIMM, RateFutureSerial
 from instruments.swap_convention import SwapConvention, SwapFixLegConvention, SwapFloatLegConvention
 from instruments.bond_future import BondFuture
-from data_api import sql
+from common import sql
+from data_api.config import META_DB
 
 NAME_ID = 'productCode'
 EXPIRY_ID = 'lastTrade'
@@ -38,22 +36,15 @@ def read_serial_futures(code: str) -> list[RateFutureSerial]:
                 name=row[0]) for row in contracts_list]
     return expiries
 
-def read_bond_futures(code: str, min_tenor: Tenor, max_tenor: Tenor, **kwargs) -> list[BondFuture]:
+def read_bond_futures(code: str) -> list[BondFuture]:
     contracts_list = cme.get_bond_futures_contracts(code)
-    expiries = [BondFuture(
-                    _expiry=row[1],
-                    _settle=row[1],
-                    _first_delivery=row[2],
-                    _last_delivery=row[3],
-                    _min_tenor=min_tenor,
-                    _max_tenor=max_tenor,
-                    name=row[0], **kwargs
-                ) for row in contracts_list]
+    expiries = [BondFuture(_expiry=row[1], _first_delivery=row[2], _last_delivery=row[3],
+                name=row[0]) for row in contracts_list]
     return expiries
 
 def read_meeting_dates(code: str) -> list[dtm.date]:
     select_query = f"SELECT date FROM meeting_dates WHERE bank='{code}' ORDER BY date ASC"
-    dates_list = sql.fetch_query(select_query)
+    dates_list = sql.fetch(select_query, META_DB)
     return [dtm.datetime.strptime(d, sql.DATE_FORMAT).date() for d, in dates_list]
 
 SWAP_CONV_TABLE = 'swap_conventions'
@@ -65,7 +56,7 @@ def read_swap_conventions() -> list[SwapConvention]:
     t2.fixing, t2.fixing_type, t2.fixing_lag, t2.reset_frequency
     FROM {SWAP_CONV_TABLE} as t1 INNER JOIN {SWAP_CONV_TABLE} as t2
     WHERE t1.name=t2.name AND t1.leg_id=1 AND t2.leg_id=2"""
-    select_res = sql.fetch_query(select_query)
+    select_res = sql.fetch(select_query, META_DB)
     conv_list = []
     for row in select_res:
         name, spot_delay, spot_cal, ccy = row[:4]
@@ -95,7 +86,7 @@ def read_swap_conventions() -> list[SwapConvention]:
 #     bank TEXT, date TEXT, description TEXT,
 #     CONSTRAINT meeting_dates_pk PRIMARY KEY (bank, date)
 # )"""
-# modify_query(create_query)
+# sql.modify(create_query)
 # df = pd.read_csv(f'data/meetingdates.csv')
 # for _, row in df.iterrows():
 #     insert_query = f"""INSERT INTO meeting_dates VALUES (
@@ -103,7 +94,7 @@ def read_swap_conventions() -> list[SwapConvention]:
 #     '{dtm.datetime.strptime(row['Date'], '%m/%d/%Y').strftime(DATE_FORMAT)}',
 #     '{row['Target Rate']}'
 # )"""
-#     modify_query(insert_query)
+#     sql.modify(insert_query)
 
 # create_query = f"""CREATE TABLE {SWAP_CONV_TABLE} (
 #     name TEXT, spot_delay TEXT, spot_calendar TEXT, leg_id INTEGER, leg_type TEXT, currency TEXT,
@@ -111,7 +102,7 @@ def read_swap_conventions() -> list[SwapConvention]:
 #     fixing TEXT, fixing_type TEXT, fixing_lag TEXT, reset_frequency TEXT,
 #     CONSTRAINT {SWAP_CONV_TABLE}_pk PRIMARY KEY (name, leg_id)
 # )"""
-# sql.modify_query(create_query)
+# sql.modify(create_query)
 # df = pd.read_csv(f'data/swap_convention.csv')
 # for _, row in df.iterrows():
 #     insert_query = f"""INSERT INTO {SWAP_CONV_TABLE} VALUES (

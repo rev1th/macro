@@ -5,7 +5,7 @@ from typing import ClassVar
 from abc import abstractmethod
 import datetime as dtm
 
-from common.chrono import Tenor
+from common.chrono.tenor import Tenor
 from common.models.base_instrument import BaseInstrument
 from instruments.swap_convention import SwapConvention, get_swap_convention
 from instruments.rate_curve_instrument import CurveInstrument

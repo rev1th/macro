@@ -3,13 +3,14 @@ import datetime as dtm
 import logging
 from copy import deepcopy
 
-import common.chrono as date_lib
+from common.chrono.tenor import Tenor
 from instruments.fixing import add_fixing_curve
 from instruments.swap_convention import add_swap_convention
 from instruments.rate_curve_instrument import Deposit
 from instruments.swap import DomesticSwap, BasisSwap
 from instruments.vol_curve import VolCurve
-import data_api.parser as data_parser
+from config import usd_mkt
+import data_api.reader as data_reader
 import data_api.cme as cme_api
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
 
@@ -20,7 +21,6 @@ FIXING_SWAP_MAP = {
     'SOFR':     ('USD_SOFR', DomesticSwap),
     'SOFR_FF':  ('USD_FF_SOFR', BasisSwap),
 }
-CALENDAR = date_lib.Calendar.USEX
 
 _SOFR_RATES = None
 _FF_RATES = None
@@ -29,16 +29,6 @@ _SOFR_SERIAL_CONTRACTS = None
 _FF_SERIAL_CONTRACTS = None
 _INITIALIZED = False
 
-
-def get_valuation_dates(from_date: dtm.date, to_date: dtm.date = None):
-    if not from_date:
-        if not to_date:
-            return [None]
-        else:
-            return date_lib.get_bdate_series(to_date, to_date, CALENDAR)
-    if not to_date:
-        to_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
-    return date_lib.get_bdate_series(from_date, to_date, CALENDAR)
 
 def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
     fut_instruments_crv = []
@@ -55,8 +45,8 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     elif contract_type == 'FF':
         codes = ['FF']
     for code in codes:
-        fut_settle_data = cme_api.load_fut_settle_prices(code, val_date)
-        futures_prices.update(fut_settle_data[1])
+        fut_settle_data = cme_api.get_fut_settle_prices(code, val_date)
+        futures_prices.update(fut_settle_data)
     for ins in fut_instruments:
         if ins.name in futures_prices:
             price = futures_prices[ins.name]
@@ -69,20 +59,20 @@ def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_ty
     return fut_instruments_crv
 
 def get_swaps_curve(val_date: dtm.date, fixing_type: str = 'SOFR', cutoff: dtm.date = None) -> list[DomesticSwap]:
-    swap_prices = cme_api.load_swap_data(fixing_type)
-    assert val_date in swap_prices, f"Swap prices missing for {val_date}"
+    swap_prices = cme_api.get_swap_data(fixing_type, val_date)
     swap_convention, swap_obj = FIXING_SWAP_MAP[fixing_type]
     swap_instruments = []
-    for tenor, rate in swap_prices[val_date].items():
-        ins = swap_obj(_convention_name=swap_convention, _end=date_lib.Tenor(tenor), name=f'{swap_convention}_{tenor}')
+    for tenor, rate in swap_prices.items():
+        ins = swap_obj(_convention_name=swap_convention, _end=Tenor(tenor), name=f'{swap_convention}_{tenor}')
         ins.set_market(val_date, rate)
         if cutoff and ins.end_date <= cutoff:
             ins.exclude_knot = True
         swap_instruments.append(ins)
+    swap_instruments.sort(key=lambda si: si.end_date)
     return swap_instruments
 
-def get_meeting_dates(val_date: dtm.date, effective_t = date_lib.Tenor('1B')) -> list[dtm.date]:
-    meeting_dates = data_parser.read_meeting_dates('FED')
+def get_meeting_dates(val_date: dtm.date, effective_t = Tenor('1B')) -> list[dtm.date]:
+    meeting_dates = data_reader.read_meeting_dates('FED')
     # meeting_dates.sort()
     meeting_dates_eff = [effective_t.get_date(dt) for dt in meeting_dates if dt >= val_date]
     return meeting_dates_eff
@@ -106,30 +96,30 @@ def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.dat
 
 def _init():
     global _SOFR_RATES, _FF_RATES, _SOFR_IMM_CONTRACTS, _SOFR_SERIAL_CONTRACTS, _FF_SERIAL_CONTRACTS, _INITIALIZED
-    first_date = date_lib.Tenor('-3m').get_date(dtm.date.today())
-    _SOFR_RATES = data_parser.read_fixings(code='SOFR', from_date=first_date)
-    _FF_RATES = data_parser.read_fixings(code='EFFR', from_date=first_date)
-    _SOFR_IMM_CONTRACTS = data_parser.read_IMM_futures(code='SR3')
-    _SOFR_SERIAL_CONTRACTS = data_parser.read_serial_futures(code='SR1')
-    _FF_SERIAL_CONTRACTS = data_parser.read_serial_futures(code='FF')
+    first_date = Tenor('-3m').get_date(dtm.date.today())
+    _SOFR_RATES = data_reader.read_fixings(code='SOFR', from_date=first_date)
+    _FF_RATES = data_reader.read_fixings(code='EFFR', from_date=first_date)
+    _SOFR_IMM_CONTRACTS = data_reader.read_IMM_futures(code='SR3')
+    _SOFR_SERIAL_CONTRACTS = data_reader.read_serial_futures(code='SR1')
+    _FF_SERIAL_CONTRACTS = data_reader.read_serial_futures(code='FF')
     
     for fc in [_SOFR_RATES, _FF_RATES]:
         add_fixing_curve(fc)
     
-    for row in data_parser.read_swap_conventions():
+    for row in data_reader.read_swap_conventions():
         add_swap_convention(row)
 
     _INITIALIZED = True
 
 
 def construct(val_dt: dtm.date = None):
-    last_val_date = date_lib.get_last_valuation_date(timezone='America/New_York', calendar=CALENDAR.value)
+    last_val_date = usd_mkt.get_last_valuation_date()
     if not val_dt or not _INITIALIZED:
         _init()
         val_dt = last_val_date
     live = val_dt > last_val_date
     
-    next_btenor = date_lib.Tenor.bday(1, CALENDAR)
+    next_btenor = Tenor.bday(1, usd_mkt.CALENDAR)
     meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)
 
     # SOFR - OIS
@@ -137,7 +127,7 @@ def construct(val_dt: dtm.date = None):
     deposit.set_market(val_dt, _SOFR_RATES.get_last_value())
 
     fut_cutoff = '5y' if live else '30m'
-    fut_cutoff_date = date_lib.Tenor(fut_cutoff).get_date(val_dt)
+    fut_cutoff_date = Tenor(fut_cutoff).get_date(val_dt)
     fut_instruments = _SOFR_IMM_CONTRACTS + _SOFR_SERIAL_CONTRACTS
     # Skip futures on expiry date, we only use fixing rates till T
     fut_instruments = [fi for fi in fut_instruments if deposit.end_date < fi.expiry]
@@ -158,15 +148,14 @@ def construct(val_dt: dtm.date = None):
         swaps = get_swaps_curve(val_dt, cutoff=fut_cutoff_date)
         curve_instruments = [deposit] + futs_crv + swaps
     curve_defs = [RateCurveModel(curve_instruments,
-                                  _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
-                                  _rate_vol_curve=rate_vol_curve,
-                                  name='SOFR')]
+                    _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
+                    _rate_vol_curve=rate_vol_curve, name='SOFR')]
 
     # Fed fund
     ff_deposit = Deposit(next_btenor, name='EFFR')
     ff_deposit.set_market(val_dt, _FF_RATES.get_last_value())
 
-    ff_fut_cutoff = date_lib.Tenor('13m').get_date(val_dt)
+    ff_fut_cutoff = Tenor('13m').get_date(val_dt)
     ff_futs = [fi for fi in _FF_SERIAL_CONTRACTS if ff_deposit.end_date < fi.expiry]
     for fi in ff_futs:
         if fi.expiry > ff_fut_cutoff:
@@ -182,12 +171,12 @@ def construct(val_dt: dtm.date = None):
         ff_swaps = get_swaps_curve(val_dt, fixing_type='SOFR_FF', cutoff=ff_fut_cutoff)
         ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
         interps = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')]
-    curve_defs.append(RateCurveModel(ff_curve_instruments,
-                                      _interpolation_methods=interps,
-                                      _rate_vol_curve=ff_rate_vol_curve,
-                                      _collateral_curve='USD-SOFR',
-                                      _spread_from='USD-SOFR',
-                                      name='FF'))
+    ff_curve_defs = [RateCurveModel(ff_curve_instruments,
+                    _interpolation_methods=interps, _rate_vol_curve=ff_rate_vol_curve,
+                    _collateral_curve='USD-SOFR', _spread_from='USD-SOFR', name='FF')]
     
-    return RateCurveGroupModel(val_dt, curve_defs, _calendar=CALENDAR, name='USD')
+    return [
+        RateCurveGroupModel(val_dt, curve_defs, _calendar=usd_mkt.CALENDAR, name='USD'),
+        RateCurveGroupModel(val_dt, ff_curve_defs, _calendar=usd_mkt.CALENDAR, name='USD'),
+    ]
 

@@ -92,7 +92,7 @@ class SwapFloatLeg(SwapLeg):
             for a_id in range(1, len(accrual_dates)):
                 reset_dates = reset_freq.generate_schedule(
                     accrual_dates[a_id-1], accrual_dates[a_id],
-                    roll_backward=False, bd_adjust=self._convention.coupon_adjust())
+                    step_backward=False, bd_adjust=self._convention.coupon_adjust())
                 fixing_dates = [fixing_lag.get_date(rd) for rd in reset_dates]
                 for f_id in range(1, len(fixing_dates)):
                     fixing_periods[a_id-1].append((

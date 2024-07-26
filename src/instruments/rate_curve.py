@@ -7,7 +7,9 @@ import bisect
 import logging
 import numpy as np
 
-from common.chrono import DayCount, get_bdate_series, Compounding, Calendar
+from common.chrono import get_bdate_series, Compounding
+from common.chrono.calendar import Calendar
+from common.chrono.daycount import DayCount
 from common.base_class import NameDateClass
 
 from lib.interpolator import Interpolator

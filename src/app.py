@@ -102,15 +102,16 @@ def refresh_date(*_):
     Output(component_id='rates-curves-status', component_property='children'),
     Input(component_id='val-date-picker', component_property='start_date'),
     Input(component_id='val-date-picker', component_property='end_date'),
+    Input(component_id='rates-ccy-dropdown', component_property='value'),
     Input(component_id='load_rates_curves', component_property='n_clicks'),
     # running=[(Output(component_id='load_bonds_curves', component_property='disabled'), True, False)],
 )
-def load_rates_curves(start_date_str: str, end_date_str: str, *_):
+def load_rates_curves(start_date_str: str, end_date_str: str, ccys: list[str], *_):
     start_date = dtm.date.fromisoformat(start_date_str) if start_date_str else None
     end_date = dtm.date.fromisoformat(end_date_str) if end_date_str else None
     try:
         r_tabvals = []
-        for ycg_arr in main.evaluate_rates_curves(start_date, end_date):
+        for ycg_arr in main.evaluate_rates_curves(start_date, end_date, ccys):
             summary_df = pd.concat([ycg.get_calibration_summary() for ycg in ycg_arr])
             graph_info = ({}, {})
             for ycg in ycg_arr:
@@ -193,13 +194,17 @@ def recalc_bonds(trade_date_str: str, curve_date_str: str):
 @callback(
     Output(component_id='bond-futures', component_property='children'),
     Output(component_id='bond-futures-status', component_property='children'),
+    Input(component_id='val-date-picker', component_property='start_date'),
     Input(component_id='val-date-picker', component_property='end_date'),
     Input(component_id='load_bond_futures', component_property='n_clicks'),
+    prevent_initial_call=True,
 )
-def load_bond_futures(date_str: str, *_):
-    value_date = dtm.date.fromisoformat(date_str) if date_str else None
+def load_bond_futures(start_date_str: str, end_date_str: str, *_):
+    start_date = dtm.date.fromisoformat(start_date_str) if start_date_str else None
+    end_date = dtm.date.fromisoformat(end_date_str) if end_date_str else None
     try:
-        measures_df = main.evaluate_bond_futures(value_date)[0].get_summary()
+        bf_models = main.evaluate_bond_futures(start_date, end_date)
+        measures_df = pd.concat([bfm.get_summary() for bfm in bf_models])
         columns = [dict(field=col) for col in measures_df.columns]
         for col in columns:
             if 'Repo' in col['field']:

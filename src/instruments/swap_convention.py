@@ -4,7 +4,8 @@ from dataclasses import field
 from enum import StrEnum
 from typing import Optional
 
-from common.chrono import Tenor, Frequency, DayCount, BDayAdjust, BDayAdjustType
+from common.chrono import Tenor, Frequency, BDayAdjust, BDayAdjustType
+from common.chrono.daycount import DayCount
 from common.currency import Currency
 from instruments.fixing import Fixing, RateFixingType
 

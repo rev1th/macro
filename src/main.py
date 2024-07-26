@@ -1,31 +1,34 @@
 
 import logging
 
-from config import usd_rc, us_bonds, us_bond_futs, cny_rc, cny_fxvol
+from config import usd_mkt, usd_rc, usd_bonds, usd_bond_futs
+from config import cny_rc, cny_fxvol
 from lib import plotter
 
 logger = logging.Logger('')
 logger.setLevel(logging.DEBUG)
 
 
-def evaluate_rates_curves(start_date = None, end_date = None):
+def evaluate_rates_curves(start_date = None, end_date = None, ccys: list[str] = None):
     ycg_usd = []
-    for date in usd_rc.get_valuation_dates(start_date, end_date):
+    for date in usd_mkt.get_valuation_dates(start_date, end_date):
         ycg_usd_dt = usd_rc.construct(date)
-        ycg_usd_dt.build(calibrate_convexity=True)
-        ycg_usd.append(ycg_usd_dt)
+        for ycg_usd_dt_i in ycg_usd_dt:
+            ycg_usd_dt_i.build(calibrate_convexity=True)
+        ycg_usd.extend(ycg_usd_dt)
     res = [ycg_usd]
 
-    ycg_cny = cny_rc.construct()
-    for ycg_cny_i  in ycg_cny:
-        ycg_cny_i.build()
-    res.append(ycg_cny)
+    if ccys and 'CNY' in ccys:
+        ycg_cny = cny_rc.construct()
+        for ycg_cny_i in ycg_cny:
+            ycg_cny_i.build()
+        res.append(ycg_cny)
 
     return res
 
 _CACHED_DATA = {}
 def evaluate_bonds_curves(value_date = None, **kwargs):
-    bcm_us = us_bonds.construct(value_date, **kwargs)
+    bcm_us = usd_bonds.construct(value_date, **kwargs)
     bcm_us.build()
     _CACHED_DATA[value_date] = bcm_us
     return [bcm_us]
@@ -33,8 +36,11 @@ def evaluate_bonds_curves(value_date = None, **kwargs):
 def evaluate_bonds_roll(curve_date = None, trade_date = None):
     return _CACHED_DATA[curve_date].get_measures(trade_date)
 
-def evaluate_bond_futures(value_date = None):
-    return [us_bond_futs.construct(value_date)]
+def evaluate_bond_futures(start_date = None, end_date = None):
+    res = []
+    for date in usd_mkt.get_valuation_dates(start_date, end_date):
+        res.append(usd_bond_futs.construct(date))
+    return res
 
 def evaluate_vol_curves():
     fxvol = cny_fxvol.construct()

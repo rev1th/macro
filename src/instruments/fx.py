@@ -3,7 +3,7 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 import datetime as dtm
 
-from common.chrono import Tenor
+from common.chrono.tenor import Tenor
 from common.currency import Currency
 from common.models.base_instrument import BaseInstrument
 from instruments.rate_curve_instrument import CurveInstrument
