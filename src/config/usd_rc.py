@@ -1,13 +1,13 @@
 
 import datetime as dtm
 import logging
-from copy import deepcopy
 
 from common.chrono.tenor import Tenor
 from instruments.fixing import add_fixing_curve
-from instruments.swap_convention import add_swap_convention
+from instruments.rate_future import RateFutureC
 from instruments.rate_curve_instrument import Deposit
 from instruments.swap import DomesticSwap, BasisSwap
+from instruments.swap_convention import add_swap_convention
 from instruments.vol_curve import VolCurve
 from config import usd_mkt
 import data_api.reader as data_reader
@@ -30,30 +30,25 @@ _FF_SERIAL_CONTRACTS = None
 _INITIALIZED = False
 
 
-def get_futures_for_curve(fut_instruments: list, val_date: dtm.date, contract_type: str) -> list:
-    fut_instruments_crv = []
-    # futures_prices = data_cme.load_prices_ftp(contract_type)
-    # assert futures_prices[0] == val_date, "Valuation date and market data mismatch"
-    # for ins in fut_instruments:
-    #     f_code = ins.name[:-3]
-    #     m_code = ins.name[-3:]
-    #     if f_code in futures_prices[1] and m_code in futures_prices[1][f_code]:
-    #         price = futures_prices[1][f_code][m_code]
+def get_futures_for_curve(fut_instruments: list[RateFutureC], val_date: dtm.date,
+                          cutoff_date: dtm.date, contract_code: str) -> list:
     futures_prices = {}
-    if contract_type == 'SOFR':
+    if contract_code == 'SOFR':
         codes = ['SR1', 'SR3']
-    elif contract_type == 'FF':
+    elif contract_code == 'FF':
         codes = ['FF']
     for code in codes:
         fut_settle_data = cme_api.get_fut_settle_prices(code, val_date)
         futures_prices.update(fut_settle_data)
+    fut_instruments_crv = []
     for ins in fut_instruments:
         if ins.name in futures_prices:
             price = futures_prices[ins.name]
             logger.info(f"Setting price for future {ins.name} to {price}")
-            ins_c = deepcopy(ins)
-            ins_c.set_market(val_date, price)
-            fut_instruments_crv.append(ins_c)
+            ins.data[val_date] = price
+            if ins.expiry > cutoff_date:
+                ins.exclude_knot = True
+            fut_instruments_crv.append(ins)
         else:
             logger.info(f"No price found for future {ins.name}. Skipping")
     return fut_instruments_crv
@@ -131,13 +126,8 @@ def construct(val_dt: dtm.date = None):
     fut_instruments = _SOFR_IMM_CONTRACTS + _SOFR_SERIAL_CONTRACTS
     # Skip futures on expiry date, we only use fixing rates till T
     fut_instruments = [fi for fi in fut_instruments if deposit.end_date < fi.expiry]
-    for fi in fut_instruments:
-        if fi.expiry > fut_cutoff_date:
-            fi.exclude_knot = True
-        else:
-            fi.exclude_knot = False
     fut_instruments.sort()
-    futs_crv = get_futures_for_curve(fut_instruments, val_dt, contract_type='SOFR')
+    futs_crv = get_futures_for_curve(fut_instruments, val_dt, fut_cutoff_date, contract_code='SOFR')
     mdt_sc = set_step_knots(futs_crv, meeting_dates_eff)
 
     usd_rate_vol = 1.4/100
@@ -157,10 +147,7 @@ def construct(val_dt: dtm.date = None):
 
     ff_fut_cutoff = Tenor('13m').get_date(val_dt)
     ff_futs = [fi for fi in _FF_SERIAL_CONTRACTS if ff_deposit.end_date < fi.expiry]
-    for fi in ff_futs:
-        if fi.expiry > ff_fut_cutoff:
-            fi.exclude_knot = True
-    ff_futs_crv = get_futures_for_curve(ff_futs, val_dt, contract_type='FF')
+    ff_futs_crv = get_futures_for_curve(ff_futs, val_dt, ff_fut_cutoff, contract_code='FF')
     ff_mdt_sc = set_step_knots(ff_futs_crv, meeting_dates_eff)
     
     ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name='FF-Vol')

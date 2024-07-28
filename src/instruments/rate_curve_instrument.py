@@ -5,7 +5,7 @@ from abc import abstractmethod
 import datetime as dtm
 import numpy as np
 
-from common.models.base_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrumentSnap
 from common.chrono.tenor import Tenor
 from instruments.rate_curve import RateCurve
 
@@ -13,7 +13,7 @@ from instruments.rate_curve import RateCurve
 # BaseModel doesn't initialize private attributes
 # https://docs.pydantic.dev/latest/usage/models/#private-model-attributes
 @dataclass
-class CurveInstrument(BaseInstrument):
+class CurveInstrument(BaseInstrumentSnap):
     _end: Tenor | dtm.date
     _: KW_ONLY
     _notional: float = 1000000

@@ -42,26 +42,27 @@ def get_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwapC]]
     inverse = spot_data[ccy_ref][0].startswith(ccy_ref)
     spot_settle_date = fx_data[1][2]
     
-    spot_ins = FXSpot(ccy_obj, _inverse=inverse, name=f'{ccy}_Spot')
-    spot_ins.set_market(data_date, spot_data[ccy_ref][1], settle_date=spot_settle_date)
+    spot_ins = FXSpot(ccy_obj, spot_settle_date, _inverse=inverse, name=f'{ccy}_Spot')
+    spot_ins.data[data_date] = spot_data[ccy_ref][1]
     
     fxfwd_ins = []
     last_settle_date = None
     for row in fx_data:
-        ins = FXSwapC(ccy_obj, _inverse=inverse, _is_ndf=True, name=f'{ccy}_{row[0]}')
+        name = f'{ccy}_{row[0]}'
         if row[0] == 'ON':
-            ins.set_market(data_date, row[1], settle_date=row[2], near_date=data_date)
+            ins = FXSwapC(ccy_obj, row[2], data_date, _inverse=inverse, _is_ndf=True, name=name)
             if row[2] == spot_settle_date:
                 ins.exclude_knot = True
         elif row[0] == 'TN':
             # tn_start_date = Tenor(date_lib.CBDay(-1, calendar)).get_date(spot_settle_date)
-            ins.set_market(data_date, row[1], settle_date=row[2], near_date=last_settle_date)
+            ins = FXSwapC(ccy_obj, row[2], last_settle_date, _inverse=inverse, _is_ndf=True, name=name)
             if last_settle_date == spot_settle_date:
                 ins.exclude_knot = True
         else:
-            ins.set_market(data_date, row[1], settle_date=row[2])
+            ins = FXSwapC(ccy_obj, row[2], _inverse=inverse, _is_ndf=True, name=name)
             if row[2] == last_settle_date:
                 ins.exclude_knot = True
+        ins.data[data_date] = row[1]
         fxfwd_ins.append(ins)
         last_settle_date = row[2]
 

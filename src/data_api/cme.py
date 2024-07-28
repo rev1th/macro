@@ -217,6 +217,7 @@ def get_fut_settle_prices(code: str, settle_date: dtm.date):
             load_future_settle_prices(code, settle_date)
         else:
             raise Exception(f"No futures settlement prices found for date {settle_date}")
+        prices_list = sql.fetch(price_query, PRICES_DB)
     res: dict[str, float] = {}
     max_oi = 0
     for row in prices_list:

@@ -20,26 +20,25 @@ class RateFuture(Future):
     _rate_end_date: dtm.date = None
 
     _convexity: ClassVar[float]
-    
-    @property
-    def convexity(self) -> float:
-        return self._convexity
-    
+
     def underlying_rate(self, date: dtm.date) -> float:
         return get_fixing(self.underlying, date)
     
+    def get_settle_rate(self, date: dtm.date, curve: RateCurve) -> float:
+        "Get settlement rate for RateFuture"
+    
     def set_convexity(self, rate_vol_curve: VolCurve, daycount_type: DayCount = DayCount.ACT360) -> None:
-        if self._rate_start_date <= self.value_date:
+        date = rate_vol_curve.date
+        if self._rate_start_date <= date:
             self._convexity = 0
             return
         mean_reversion_rate = 0.03
         vol = rate_vol_curve.get_vol(self.settle_date)
-        dcf_v_s = daycount_type.get_dcf(self.value_date, self.settle_date)
+        dcf_v_s = daycount_type.get_dcf(date, self.settle_date)
         dcf_rs_re = daycount_type.get_dcf(self._rate_start_date, self._rate_end_date)
         beta_rs_re = (1 - np.exp(-mean_reversion_rate * dcf_rs_re)) / mean_reversion_rate
         convex_unit = vol * vol / 2 * beta_rs_re * dcf_v_s * (dcf_v_s - dcf_rs_re)
-        self._convexity = (100 - self.price + 100 / dcf_rs_re) * (1 - np.exp(-convex_unit))
-    
+        self._convexity = (100 - self.data[date] + 100 / dcf_rs_re) * (1 - np.exp(-convex_unit))
 
 @dataclass
 class RateFutureC(RateFuture, CurveInstrument):
@@ -49,8 +48,9 @@ class RateFutureC(RateFuture, CurveInstrument):
         self._end = self.expiry
     
     def get_pv(self, curve: RateCurve) -> float:
-        return self.notional * (1 - self.get_settle_rate(curve) - (self.price + self.convexity) / 100)
-
+        settle_rate = self.get_settle_rate(curve.date, curve)
+        price = self.data[curve.date]
+        return self.notional * (1 - settle_rate - (price + self._convexity) / 100)
 
 @dataclass
 class RateFutureIMM(RateFutureC):
@@ -59,9 +59,8 @@ class RateFutureIMM(RateFutureC):
         super().__post_init__()
         self._rate_end_date = self.settle_date
     
-    def get_settle_rate(self, curve: RateCurve) -> float:
+    def get_settle_rate(self, _: dtm.date, curve: RateCurve) -> float:
         return curve.get_forecast_rate(self._rate_start_date, self.settle_date, self.underlying)
-
 
 @dataclass
 class RateFutureSerial(RateFutureC):
@@ -81,20 +80,16 @@ class RateFutureSerial(RateFutureC):
             bdates.append(self._rate_end_date)
         self.fixing_dates = bdates
     
-    def set_market(self, date: dtm.date, price: float) -> None:
-        super().set_market(date, price)
-    
-    def get_settle_rate(self, curve: RateCurve) -> float:
+    def get_settle_rate(self, date: dtm.date, curve: RateCurve) -> float:
         settle_rate = 0
         bdates = self.fixing_dates
         for di in range(0, len(bdates)-1):
             date_i = bdates[di]
             date_i_next = bdates[di+1]
-            if date_i >= self.value_date:
+            if date_i >= date:
                 rate_fix = curve.get_forward_rate(date_i, date_i_next)
             else:
                 rate_fix = self.underlying_rate(date_i)
-            
             settle_rate += rate_fix * (date_i_next - date_i).days
             date_i = date_i_next
         

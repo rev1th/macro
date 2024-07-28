@@ -2,7 +2,6 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 from typing import ClassVar
-from abc import abstractmethod
 import datetime as dtm
 
 from instruments.swap_convention import SwapLegConvention, SwapFloatLegConvention
@@ -39,7 +38,6 @@ class SwapLeg:
         pay_delay = self._convention.coupon_pay_delay()
         self.coupon_pay_dates = [pay_delay.get_date(rd) for rd in self.coupon_dates]
     
-    @abstractmethod
     def get_pv(self) -> float:
         """Get PV for Swap Leg"""
 

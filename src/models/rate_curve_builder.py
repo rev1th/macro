@@ -13,7 +13,7 @@ from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_future import RateFutureC
-from instruments.swap import DomesticSwap, BasisSwap, SwapCommonC
+from instruments.swap import DomesticSwap, BasisSwap, SwapBaseC
 from instruments.fx import FXSpot, FXSwapC, FXCurve
 from instruments.rate_curve import RateCurve, SpreadCurve
 from instruments.vol_curve import VolCurve
@@ -42,11 +42,18 @@ class RateCurveModel(NameClass):
     _curve: ClassVar[RateCurve]
     _constructor: ClassVar[NameDateClass]
     _knots: ClassVar[list[dtm.date]]
-    _knots_instruments: ClassVar[dict[dtm.date, CurveInstrument]]
+    _knots_instruments: ClassVar[dict[dtm.date, list[CurveInstrument]]]
 
-    @property
-    def instruments(self) -> list[CurveInstrument]:
-        return self._instruments
+    def __post_init__(self):
+        knots_instruments = {}
+        for ins in self._instruments:
+            ins_knot = ins.knot
+            if ins_knot:
+                if ins_knot not in knots_instruments:
+                    knots_instruments[ins_knot] = []
+                knots_instruments[ins_knot].append(ins)
+        self._knots = sorted(knots_instruments.keys())
+        self._knots_instruments = knots_instruments
     
     @property
     def curve(self) -> RateCurve:
@@ -61,18 +68,9 @@ class RateCurveModel(NameClass):
         return self._constructor.date
     
     def knot_instruments(self) -> list[CurveInstrument]:
-        return [inst for inst in self.instruments if inst.knot]
+        return [inst for inst in self._instruments if inst.knot]
     
     def reset(self, date: dtm.date = None) -> None:
-        knots_instruments = {}
-        for ins in self.instruments:
-            ins_knot = ins.knot
-            if ins_knot:
-                if ins_knot not in knots_instruments:
-                    knots_instruments[ins_knot] = []
-                knots_instruments[ins_knot].append(ins)
-        self._knots = list(knots_instruments.keys())
-        self._knots_instruments = knots_instruments
         if date:
             kwargs = {}
             if self._interpolation_methods:
@@ -112,7 +110,7 @@ class RateCurveModel(NameClass):
     def get_calibration_summary(self) -> pd.DataFrame:
         return pd.DataFrame(
             [(self.date, self.name, ins.name, ins.end_date, ins.price, ins.knot,
-                self.get_instrument_pv(ins)) for ins in self.instruments],
+                self.get_instrument_pv(ins)) for ins in self._instruments],
             columns=['Date', 'Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
         )
     
@@ -181,7 +179,7 @@ class RateCurveModel(NameClass):
         return True
     
     def set_convexity(self) -> None:
-        for f_ins in self.instruments:
+        for f_ins in self._instruments:
             if isinstance(f_ins, RateFutureC):
                 f_ins.set_convexity(self._rate_vol_curve)
         return
@@ -190,8 +188,8 @@ class RateCurveModel(NameClass):
         self._constructor.build_simple()
         if node_vol_date is None:
             node_vol_date = self.date
-        for sw_ins in self.instruments:
-            if isinstance(sw_ins, SwapCommonC) and sw_ins.exclude_knot and sw_ins.end_date > node_vol_date:
+        for sw_ins in self._instruments:
+            if isinstance(sw_ins, SwapBaseC) and sw_ins.exclude_knot and sw_ins.end_date > node_vol_date:
                 if isinstance(sw_ins, DomesticSwap):
                     fut_implied_par = sw_ins.get_par(self.curve)
                     sw_crv_diff = fut_implied_par - sw_ins.fix_rate

@@ -2,8 +2,8 @@
 import datetime as dtm
 
 from common.chrono import Tenor, Frequency
-from common.chrono.daycount import DayCount
-from instruments.bond import ZeroCouponBond, FixCouponBond
+from instruments.bond import ZeroCouponBond, ZeroCouponBondSnap
+from instruments.coupon_bond import FixCouponBond, FixCouponBondSnap
 from config import usd_mkt
 import data_api.treasury as td_api
 from models.bond_curve_model import BondCurveModelNS, BondCurveModelNP
@@ -13,17 +13,18 @@ MIN_TENOR = Tenor('1m')
 CUSIP_COL, TYPE_COL, RATE_COL, MATURITY_COL, BUY_COL, SELL_COL, CLOSE_COL = (
     td_api.COL_NAMES[id] for id in [0, 1, 2, 3, -3, -2, -1])
 
-def construct(value_date: dtm.date = None, include_term: bool = False, weight_type = BondCurveWeightType.OTR):
+def construct(value_date: dtm.date = None, weight_type = BondCurveWeightType.OTR):
     if not value_date:
         value_date = usd_mkt.get_last_valuation_date()
     min_maturity = MIN_TENOR.get_date(value_date)
-    trade_date, settle_date = value_date, None
+    settle_delay = Tenor.bday(1, usd_mkt.CALENDAR)
     bonds_price = td_api.load_bonds_price(value_date)
     if sum(bonds_price[CLOSE_COL]) == 0:
-        trade_date, settle_date = None, value_date
+        settle_date = value_date
+    else:
+        settle_date = settle_delay.get_date(value_date)
     bonds_list = []
     bills_list = []
-    settle_delay = Tenor.bday(1)
     for _, b_r in bonds_price.iterrows():
         cusip, b_type, mat_date = b_r[CUSIP_COL], b_r[TYPE_COL], b_r[MATURITY_COL].date()
         if b_r[CLOSE_COL] == 0:            
@@ -48,18 +49,16 @@ def construct(value_date: dtm.date = None, include_term: bool = False, weight_ty
         if mat_date < min_maturity:
             continue
         if b_type == 'BILL':
-            bill_obj = ZeroCouponBond(mat_date, name=cusip, #_daycount_type=DayCount.ACT360,
-                                    _settle_delay=settle_delay)
-            bill_obj.set_market(settle_date, price, trade_date=trade_date)
-            bills_list.append((bill_obj, weight))
+            bill_obj = ZeroCouponBond(mat_date, name=cusip, _settle_delay=settle_delay)
+            bill_state = ZeroCouponBondSnap(bill_obj, settle_date, price)
+            bills_list.append((bill_state, weight))
         elif b_type in ('NOTE', 'BOND'):
             bond_obj = FixCouponBond(
                         mat_date, b_r[RATE_COL], Frequency.SemiAnnual, name=cusip,
-                        _daycount_type=DayCount.ACT365,
                         _settle_delay=settle_delay,
                         _first_settle_date=value_date)
-            bond_obj.set_market(settle_date, price, trade_date=trade_date)
-            bonds_list.append((bond_obj, weight))
+            bond_state = FixCouponBondSnap(bond_obj, settle_date, price)
+            bonds_list.append((bond_state, weight))
     match weight_type:
         case BondCurveWeightType.OTR:
             tenors = ['6M'] + [f'{t}y' for t in [1, 2, 3, 5, 7, 10, 30]]
@@ -74,5 +73,5 @@ def update_bond_model(curve: BondCurveModelNP) -> None:
     _BOND_MODEL_CACHE[curve.date] = curve
 def get_bond_model(date: dtm.date):
     if date not in _BOND_MODEL_CACHE:
-        update_bond_model(construct(date, include_term=True))
+        update_bond_model(construct(date))
     return _BOND_MODEL_CACHE[date]

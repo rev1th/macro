@@ -16,7 +16,7 @@ class BondFutureModel(NameDateClass):
         curve = rate_curve_builder.get_rate_curve(self._curve_name, self.date)
         for bf in self._instruments:
             for bfb in bf.get_basket_metrics(curve):
-                res.append((bf.name, bf.value_date, bf.expiry, bf.price,
+                res.append((bf.name, self.date, bf.expiry, bf.data[self.date],
                             bfb.bond.display_name(), bfb.conversion_factor, 
                             bfb.delivery_date, bfb.net_basis, bfb.repo))
         return pd.DataFrame(res, columns=['Name', 'Date', 'Expiry', 'Price', 'Bond', 'Conversion Factor',

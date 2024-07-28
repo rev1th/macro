@@ -1,7 +1,7 @@
 
 import logging
 
-from instruments.bond import FixCouponBond
+from instruments.coupon_bond import FixCouponBond, FixCouponBondSnap
 from instruments.bond_future import BondFuture
 import data_api.reader as data_reader
 import data_api.cme as cme_api
@@ -13,7 +13,7 @@ from models.bond_future_model import BondFutureModel
 logger = logging.Logger(__name__)
 
 
-def get_contracts(code: str, value_date, bond_universe: list[FixCouponBond]) -> list[BondFuture]:
+def get_contracts(code: str, value_date, bond_universe: list[FixCouponBondSnap]) -> list[BondFuture]:
     listed_bond_futs = data_reader.read_bond_futures(code)
     futures_prices = cme_api.get_fut_settle_prices(code, value_date)
     bond_futs = []
@@ -21,7 +21,7 @@ def get_contracts(code: str, value_date, bond_universe: list[FixCouponBond]) -> 
         if ins.name in futures_prices:
             price = futures_prices[ins.name]
             logger.info(f"Setting price for future {ins.name} to {price}")
-            ins.set_market(value_date, price)
+            ins.data[value_date] = price
             ins._basket_bonds = bond_fut_lib.get_basket_bonds(ins.name, bond_universe, ins.expiry)
             bond_futs.append(ins)
         else:
@@ -37,7 +37,6 @@ def construct(value_date = None):
         _BOND_UNIVERSE = tsy_api.get_coupon_bonds(value_date)
     settle_date = min(value_date, last_settle_date)
     bonds_price = tsy_api.get_bonds_price(settle_date)
-    for bond in _BOND_UNIVERSE:
-        bond.set_market(settle_date, bonds_price[bond.name])
-    contracts = [get_contracts(code, value_date, _BOND_UNIVERSE) for code in bond_fut_lib.FUTPROD_TENORS]
+    bonds_basket = [FixCouponBondSnap(bond, settle_date, bonds_price[bond.name]) for bond in _BOND_UNIVERSE]
+    contracts = [get_contracts(code, value_date, bonds_basket) for code in bond_fut_lib.FUTPROD_TENORS]
     return BondFutureModel(value_date, [c for cs in contracts for c in cs], 'USD-SOFR')

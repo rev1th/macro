@@ -9,9 +9,10 @@ import datetime as dtm
 
 from common.base_class import NameDateClass
 from common.chrono.tenor import Tenor
+from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
-from instruments.bond import Bond, BondYieldMethod
+from instruments.bond import BondSnap, BondYieldParameters
 import models.rate_curve_builder as rcb
 
 logger = logging.Logger(__name__)
@@ -21,7 +22,7 @@ logger = logging.Logger(__name__)
 class BondCurveModel(NameDateClass):
 
     _base_curve: str
-    _bonds: list[tuple[Bond, float]]
+    _bonds: list[tuple[BondSnap, float]]
     
     def base_curve(self):
         return rcb.get_rate_curve(self._base_curve, self.date)
@@ -37,7 +38,7 @@ class BondCurveModel(NameDateClass):
         if date:
             rolled_curve = RollForwardCurve(self.spread_curve, date)
         for bnd, _ in sorted(self._bonds):
-            if date and date > bnd.value_date:
+            if date and date > bnd.settle_date:
                 if date < bnd.maturity_date:
                     bnd = bnd.roll_date(date)
                     if bnd.settle_date < bnd.maturity_date:
@@ -55,11 +56,12 @@ class BondCurveModel(NameDateClass):
 class BondCurveNS(NameDateClass):
     
     _base_curve: str
+    _daycount: DayCount
     _coeffs: tuple[float, float, float]
     _decay_rate: float
 
-    def get_rate(self, bond: Bond) -> float:
-        dcf = bond.get_settle_dcf(bond.maturity_date)
+    def get_rate(self, bond: BondSnap) -> float:
+        dcf = self._daycount.get_dcf(bond.settle_date, bond.maturity_date)
         decay_rate = self._decay_rate
         decay_factor = np.exp(-self._decay_rate * dcf)
         slope_factor = (1 - decay_factor) / (decay_rate * dcf)
@@ -68,6 +70,7 @@ class BondCurveNS(NameDateClass):
 @dataclass
 class BondCurveModelNS(BondCurveModel):
     _decay_rate: float = 1
+    _daycount: DayCount = DayCount.ACT365
 
     curve: ClassVar[BondCurveNS]
 
@@ -75,7 +78,7 @@ class BondCurveModelNS(BondCurveModel):
         xs = []
         decay_rate = self._decay_rate
         for ins, _ in self._bonds:
-            dcf = ins.get_settle_dcf(ins.maturity_date)
+            dcf = self._daycount.get_dcf(ins.settle_date, ins.maturity_date)
             decay_factor = np.exp(-decay_rate * dcf)
             slope_factor = (1 - decay_factor) / (decay_rate * dcf)
             xs.append([1, slope_factor, (slope_factor - decay_factor)])
@@ -87,7 +90,7 @@ class BondCurveModelNS(BondCurveModel):
         y = [bond.get_zspread(crv) for bond, _ in self._bonds]
         # x_in = sm.add_constant(r_v[0], prepend=False)
         res = sm.OLS(y, x_in).fit()
-        self.curve = BondCurveNS(self.date, self._base_curve, tuple(res.params), self._decay_rate)
+        self.curve = BondCurveNS(self.date, self._base_curve, self._daycount, tuple(res.params), self._decay_rate)
         return True
 
 
@@ -159,12 +162,11 @@ class BondCurveModelNP(BondCurveModel):
     def get_graph_info(self):
         bond_measures = []
         curve = rcb.get_rate_curve(self._base_curve, self.date)
-        yield_method = BondYieldMethod()
+        yield_method = BondYieldParameters()
         for bnd, _ in self._bonds:
             date = bnd.maturity_date
             bond_measures.append([
                 date,
-                # yield_method._compounding.get_rate(curve.get_spread_df(date), bnd.get_settle_dcf(date)),
                 self.spread_curve.get_spread_rate(date, yield_method._compounding),
                 bnd.get_zspread(curve),
                 bnd.display_name(),

@@ -5,7 +5,8 @@ import pandas as pd
 
 from common import request_web as request
 from common.chrono import Frequency, Tenor
-from instruments.bond import FixCouponBond, ZeroCouponBond
+from instruments.bond import ZeroCouponBond
+from instruments.coupon_bond import FixCouponBond
 from common import sql
 from data_api.config import META_DB
 

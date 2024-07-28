@@ -2,11 +2,10 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field, KW_ONLY
 from typing import ClassVar
-from abc import abstractmethod
 import datetime as dtm
 
 from common.chrono.tenor import Tenor
-from common.models.base_instrument import BaseInstrument
+from common.models.base_instrument import BaseInstrumentSnap
 from instruments.swap_convention import SwapConvention, get_swap_convention
 from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_curve import RateCurve
@@ -14,7 +13,7 @@ from instruments.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
 
 
 @dataclass
-class SwapCommon(BaseInstrument):
+class SwapBase(BaseInstrumentSnap):
     _convention_name: str
     _end: Tenor
     _: KW_ONLY
@@ -61,21 +60,19 @@ class SwapCommon(BaseInstrument):
     
     def set_market(self, date: dtm.date, rate1: float = 0, rate2: float = 0) -> None:
         super().set_market(date)
-        self._start_date = self._start.get_date(self._convention.spot_delay().get_date(self._value_date))
+        self._start_date = self._start.get_date(self._convention.spot_delay().get_date(self.value_date))
         self._end_date = self._end.get_date(self._start_date)
         self._leg1.set_market(self._start_date, self._end_date, rate1)
         self._leg2.set_market(self._start_date, self._end_date, rate2)
     
-    @abstractmethod
     def get_par(self, _: RateCurve) -> float:
         """Get Par rate for Swap"""
 
-    @abstractmethod
     def get_pv01(self, _: RateCurve) -> float:
         """Get PV01 for Swap"""
 
 @dataclass
-class SwapCommonC(SwapCommon, CurveInstrument):
+class SwapBaseC(SwapBase, CurveInstrument):
     
     def set_market(self, date: dtm.date, rate1: float = 0, rate2: float = 0) -> None:
         super().set_market(date, rate1, rate2)
@@ -84,7 +81,7 @@ class SwapCommonC(SwapCommon, CurveInstrument):
 
 # Single currency Fix vs Float
 @dataclass
-class DomesticSwap(SwapCommonC):
+class DomesticSwap(SwapBaseC):
     _fix_leg_id: int = 1
     _units: float = 1/100  # standard in %
     _rate: float = field(init=False)
@@ -132,7 +129,7 @@ class DomesticSwap(SwapCommonC):
 
 # Single currency Float vs Float
 @dataclass
-class BasisSwap(SwapCommonC):
+class BasisSwap(SwapBaseC):
     _spread_leg_id: int = 2
     _units: float = 1/10000  # standard in bps
     _spread: float = field(init=False)
