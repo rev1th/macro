@@ -5,65 +5,62 @@ from typing import ClassVar
 import datetime as dtm
 
 from common.chrono.tenor import Tenor
-from common.models.base_instrument import BaseInstrumentSnap
-from instruments.swap_convention import SwapConvention, get_swap_convention
+from common.models.base_instrument import BaseInstrument
+from instruments.swap_convention import SwapConvention
 from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_curve import RateCurve
 from instruments.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
-
+from models.context import ConfigContext
 
 @dataclass
-class SwapBase(BaseInstrumentSnap):
+class SwapTemplate(BaseInstrument):
     _convention_name: str
     _end: Tenor
-    _: KW_ONLY
-    _notional: float = 1000000
-    _units: float = 1
     # mutable defaults not allowed
     # https://docs.python.org/3/library/dataclasses.html#default-factory-functions
     _start: Tenor = field(default_factory=Tenor.bday)
 
-    _convention: ClassVar[SwapConvention]
-    _start_date: ClassVar[dtm.date]
-    _end_date: ClassVar[dtm.date]
-    _leg1: ClassVar[SwapLeg] = None
-    _leg2: ClassVar[SwapLeg] = None
-    
     def __post_init__(self):
         if not self.name:
             self.name = f'{self._convention_name}_{self._end}'
-        self._convention = get_swap_convention(self._convention_name)
     
-    @property
-    def end(self):
-        return self._end
+    def to_trade(self, trade_date: dtm.date):
+        convention = ConfigContext().get_swap_convention(self._convention_name)
+        swap_class = BasisSwap if convention.is_basis() else DomesticSwap
+        start_date = self._start.get_date(convention.spot_delay().get_date(trade_date))
+        end_date = self._end.get_date(start_date)
+        return swap_class(end_date, convention, start_date, end_date, name=self.name)
+
+@dataclass
+class SwapTrade(BaseInstrument):
+    _convention: SwapConvention
+    _start_date: dtm.date
+    _end_date: dtm.date
+    _: KW_ONLY
+    _notional: float = 1000000
+    _units: float = 1
+
+    _leg1: ClassVar[SwapLeg] = None
+    _leg2: ClassVar[SwapLeg] = None
     
     @property
     def end_date(self):
         return self._end_date
-
-    @property
-    def start(self):
-        return self._start
     
     @property
     def start_date(self):
         return self._start_date
 
     @property
-    def notional(self) -> float:
+    def notional(self):
         return self._notional
     
     @property
     def convention(self):
         return self._convention
     
-    def set_market(self, date: dtm.date, rate1: float = 0, rate2: float = 0) -> None:
-        super().set_market(date)
-        self._start_date = self._start.get_date(self._convention.spot_delay().get_date(self.value_date))
-        self._end_date = self._end.get_date(self._start_date)
-        self._leg1.set_market(self._start_date, self._end_date, rate1)
-        self._leg2.set_market(self._start_date, self._end_date, rate2)
+    def __lt__(self, other) -> bool:
+        return self._end_date < other._end_date
     
     def get_par(self, _: RateCurve) -> float:
         """Get Par rate for Swap"""
@@ -72,59 +69,51 @@ class SwapBase(BaseInstrumentSnap):
         """Get PV01 for Swap"""
 
 @dataclass
-class SwapBaseC(SwapBase, CurveInstrument):
+class SwapBaseC(SwapTrade, CurveInstrument):
     
-    def set_market(self, date: dtm.date, rate1: float = 0, rate2: float = 0) -> None:
-        super().set_market(date, rate1, rate2)
-        self._knot = self.end_date
-        assert date <= self.knot, "Valuation date cannot be after expiry"
+    def __post_init__(self):
+        self._end = self._end_date
 
 # Single currency Fix vs Float
 @dataclass
 class DomesticSwap(SwapBaseC):
     _fix_leg_id: int = 1
     _units: float = 1/100  # standard in %
-    _rate: float = field(init=False)
-
-    _fix_leg: ClassVar[SwapFixLeg]
-    _float_leg: ClassVar[SwapFloatLeg]
     
     def __post_init__(self):
-        super().__post_init__()
         assert self._fix_leg_id in (1, 2), f"Invalid fix leg specified {self._fix_leg_id}"
-        self._fix_leg = SwapFixLeg(self.convention.leg1, self.notional, _units=self._units)
-        self._float_leg = SwapFloatLeg(self.convention.leg2, -self.notional)
-        if self._fix_leg_id == 1:
-            self._leg1, self._leg2 = self._fix_leg, self._float_leg
-        else:
-            self._leg1, self._leg2 = self._float_leg, self._fix_leg
+        self._leg1 = SwapFixLeg(self.convention.leg1, self._start_date, self._end_date, self.notional)
+        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start_date, self._end_date, -self.notional)
     
     @property
-    def price(self) -> float:
-        return self._rate
+    def fix_leg(self) -> SwapFixLeg:
+        return self._leg1
     
     @property
-    def fix_rate(self) -> float:
-        return self._rate * self._units
+    def float_leg(self):
+        return self._leg2
     
-    def set_market(self, date: dtm.date, rate: float) -> None:
-        super().set_market(date, rate1=rate)
-        self._rate = rate
+    def fix_rate(self, date: dtm.date) -> float:
+        return self.data[date] * self._units
+    
+    def set_data(self, date: dtm.date, rate: float):
+        self.data[date] = rate
+        self.fix_leg._rate = rate * self._units
     
     def get_pv(self, forward_curve: RateCurve, discount_curve: RateCurve = None) -> float:
         if not discount_curve:
             discount_curve = forward_curve
-        float_pv = self._float_leg.get_pv(forward_curve=forward_curve, discount_curve=discount_curve)
-        return self._fix_leg.get_pv(discount_curve) + float_pv
+        float_pv = self.float_leg.get_pv(forward_curve=forward_curve, discount_curve=discount_curve)
+        return self.fix_leg.get_pv(discount_curve) + float_pv
     
     def get_par(self, forward_curve: RateCurve, discount_curve: RateCurve = None) -> float:
         if not discount_curve:
             discount_curve = forward_curve
         pv = self.get_pv(forward_curve=forward_curve, discount_curve=discount_curve)
-        return self._rate * self._units - pv / self._fix_leg.get_annuity(discount_curve)
+        return self.data[forward_curve.date] * self._units - pv / self.fix_leg.get_annuity(discount_curve)
 
     def get_pv01(self, discount_curve: RateCurve) -> float:
-        return self._fix_leg.get_annuity(discount_curve) / 10000
+        return self.fix_leg.get_annuity(discount_curve) / 10000
 
 
 # Single currency Float vs Float
@@ -132,38 +121,23 @@ class DomesticSwap(SwapBaseC):
 class BasisSwap(SwapBaseC):
     _spread_leg_id: int = 2
     _units: float = 1/10000  # standard in bps
-    _spread: float = field(init=False)
-
-    _spread_leg: ClassVar[SwapFloatLeg]
 
     def __post_init__(self):
         super().__post_init__()
         assert self._spread_leg_id in (1, 2), f"Invalid spread leg specified {self._spread_leg_id}"
-        self._leg1 = SwapFloatLeg(self.convention.leg1, self.notional, _units=self._units)
-        self._leg2 = SwapFloatLeg(self.convention.leg2, -self.notional, _units=self._units)
-        if self._spread_leg_id == 1:
-            self._spread_leg = self._leg1
-        else:
-            self._spread_leg = self._leg2
-    
-    def set_market(self, date: dtm.date, points: float) -> None:
-        if self._spread_leg_id == 1:
-            super().set_market(date, rate1=points)
-        else:
-            super().set_market(date, rate2=points)
-        self._spread = points
-    
-    @property
-    def price(self) -> float:
-        return self._spread
+        self._leg1 = SwapFloatLeg(self.convention.leg1, self._start_date, self._end_date, self.notional, _units=self._units)
+        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start_date, self._end_date, -self.notional, _units=self._units)
     
     @property
     def spread_leg(self) -> SwapFloatLeg:
-        return self._spread_leg
+        return self._leg2
     
-    @property
-    def spread(self) -> float:
-        return self._spread * self._units
+    def spread(self, date: dtm.date) -> float:
+        return self.data[date] * self._units
+    
+    def set_data(self, date: dtm.date, spread: float):
+        self.data[date] = spread
+        self.spread_leg._spread = spread * self._units
     
     def get_pv(self,
                leg1_forward_curve: RateCurve, leg2_forward_curve: RateCurve,
@@ -183,7 +157,7 @@ class BasisSwap(SwapBaseC):
             leg1_forward_curve=leg1_forward_curve,
             leg2_forward_curve=leg2_forward_curve,
             discount_curve=discount_curve)
-        return self._spread * self._units - pv / self.spread_leg.get_annuity(discount_curve)
+        return self.data[leg1_forward_curve.date] * self._units - pv / self.spread_leg.get_annuity(discount_curve)
 
     def get_pv01(self, discount_curve: RateCurve) -> float:
         return self.spread_leg.get_annuity(discount_curve) / 10000

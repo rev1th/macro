@@ -17,6 +17,7 @@ from instruments.swap import DomesticSwap, BasisSwap, SwapBaseC
 from instruments.fx import FXSpot, FXSwapC, FXCurve
 from instruments.rate_curve import RateCurve, SpreadCurve
 from instruments.vol_curve import VolCurve
+from models.curve_context import CurveContext
 
 CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
@@ -84,10 +85,10 @@ class RateCurveModel(NameClass):
             if self._daycount_type:
                 kwargs['_daycount_type'] = self._daycount_type
             if self._collateral_curve:
-                self.collateral_curve = get_rate_curve_last(self._collateral_curve, self.date)
+                self.collateral_curve = CurveContext().get_rate_curve_last(self._collateral_curve, self.date)
             if self._spread_from:
                 curve_obj = SpreadCurve
-                kwargs['_base_curve'] = get_rate_curve(self._spread_from, self.date)
+                kwargs['_base_curve'] = CurveContext().get_rate_curve(self._spread_from, self.date)
             elif self._collateral_spot:
                 curve_obj = FXCurve
                 kwargs['_spot'] = self._collateral_spot
@@ -101,7 +102,7 @@ class RateCurveModel(NameClass):
                 name=f"{self._constructor.name}-{self.name}",
                 **kwargs
             )
-            update_rate_curve(self._curve)
+            CurveContext().update_rate_curve(self._curve)
             if self._rate_vol_curve:
                 self.set_convexity()
         else:
@@ -109,7 +110,7 @@ class RateCurveModel(NameClass):
     
     def get_calibration_summary(self) -> pd.DataFrame:
         return pd.DataFrame(
-            [(self.date, self.name, ins.name, ins.end_date, ins.price, ins.knot,
+            [(self.date, self.name, ins.name, ins.end, ins.data[self.date], ins.knot,
                 self.get_instrument_pv(ins)) for ins in self._instruments],
             columns=['Date', 'Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
         )
@@ -192,13 +193,13 @@ class RateCurveModel(NameClass):
             if isinstance(sw_ins, SwapBaseC) and sw_ins.exclude_knot and sw_ins.end_date > node_vol_date:
                 if isinstance(sw_ins, DomesticSwap):
                     fut_implied_par = sw_ins.get_par(self.curve)
-                    sw_crv_diff = fut_implied_par - sw_ins.fix_rate
+                    sw_crv_diff = fut_implied_par - sw_ins.fix_rate(self.date)
                 elif isinstance(sw_ins, BasisSwap):
                     fut_implied_par = sw_ins.get_par(leg1_forward_curve=self.curve,
                                                      leg2_forward_curve=self.collateral_curve)
-                    sw_crv_diff = fut_implied_par - sw_ins.spread
+                    sw_crv_diff = fut_implied_par - sw_ins.spread(self.date)
                 node_vol = self._rate_vol_curve.get_node(node_vol_date)
-                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.price}')
+                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.data[self.date]}')
                 if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE:
                     sw_dcf_1 = self.curve.get_dcf(self.curve.date, node_vol_date)
                     sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
@@ -357,17 +358,3 @@ class RateCurveGroupModel(NameDateClass):
             fwd_rates[yc.display_name()] = pd.Series(fwd_rates_i)
             node_zrates[yc.display_name()] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates
-
-_RATE_CURVE_CACHE: dict[tuple[str, dtm.date], RateCurve] = {}
-def update_rate_curve(curve: RateCurve) -> None:
-    _RATE_CURVE_CACHE[(curve.name, curve.date)] = curve
-def get_rate_curve(name: str, date: dtm.date):
-    return _RATE_CURVE_CACHE[(name, date)]
-
-def get_rate_curve_last(name: str, date: dtm.date):
-    last_date = None
-    for k in _RATE_CURVE_CACHE:
-        if k[0] == name and k[1] <= date:
-            if not last_date or last_date < k[1]:
-                last_date = k[1]
-    return _RATE_CURVE_CACHE[(name, last_date)]

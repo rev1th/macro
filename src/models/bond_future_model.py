@@ -4,7 +4,7 @@ import pandas as pd
 
 from common.base_class import NameDateClass
 from instruments.bond_future import BondFuture
-from models import rate_curve_builder
+from models.curve_context import CurveContext
 
 @dataclass
 class BondFutureModel(NameDateClass):
@@ -13,7 +13,7 @@ class BondFutureModel(NameDateClass):
 
     def get_summary(self):
         res = []
-        curve = rate_curve_builder.get_rate_curve(self._curve_name, self.date)
+        curve = CurveContext().get_rate_curve(self._curve_name, self.date)
         for bf in self._instruments:
             for bfb in bf.get_basket_metrics(curve):
                 res.append((bf.name, self.date, bf.expiry, bf.data[self.date],

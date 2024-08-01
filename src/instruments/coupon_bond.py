@@ -12,6 +12,10 @@ from common.numeric import solver
 from instruments.bond import Bond, BondSnap, BondYieldParameters, CashFlow, FACE_VALUE
 from instruments.rate_curve import RateCurve
 
+@dataclass(frozen=True)
+class CouponCashFlow(CashFlow):
+    start_date: dtm.date
+
 @dataclass
 class FixCouponBond(Bond):
     _coupon_rate: float
@@ -37,7 +41,8 @@ class FixCouponBond(Bond):
         c_dcf = self.get_coupon_dcf()
         self.cashflows = []
         for cd_id in range(1, len(coupon_dates)):
-            self.cashflows.append(CashFlow(coupon_dates[cd_id], self._coupon_rate * c_dcf, coupon_dates[cd_id-1]))
+            self.cashflows.append(CouponCashFlow(
+                coupon_dates[cd_id], self._coupon_rate * c_dcf, coupon_dates[cd_id-1]))
         # Add Notional
         self.cashflows.append(CashFlow(coupon_dates[-1], 1))
 
@@ -52,7 +57,11 @@ class FixCouponBondSnap(BondSnap):
         self.coupon_index = bisect.bisect_right(self._bond.cashflows, self.settle_date, key=lambda cshf: cshf.date)
         self.acrrued_interest = self.get_accrued_interest(self.settle_date, self._bond.cashflows[self.coupon_index])
     
-    def get_accrued_interest(self, settle_date: dtm.date, cashflow: CashFlow):
+    @property
+    def cashflows(self):
+        return self._bond.cashflows[self.coupon_index:]
+    
+    def get_accrued_interest(self, settle_date: dtm.date, cashflow: CouponCashFlow):
         cshf_start = cashflow.start_date
         if settle_date > cshf_start:
             accrued_fraction = (settle_date - cshf_start).days / (cashflow.date - cshf_start).days
@@ -68,15 +77,15 @@ class FixCouponBondSnap(BondSnap):
     
     def get_price_from_yield(self, yld: float, yield_params = BondYieldParameters()) -> float:
         c_dcf = self._bond.get_coupon_dcf()
-        c_id = self.coupon_index
+        cashflows = self.cashflows
         yc_dcf = yield_params.get_period_dcf()
-        yc0_dcf = yield_params.get_dcf(self.settle_date, self.cashflows[c_id].date)
+        yc0_dcf = yield_params.get_dcf(self.settle_date, cashflows[0].date)
         df = 1 / (1 + yld * yc_dcf) ** (yc0_dcf / yc_dcf)
-        pv = self.cashflows[c_id].amount * df
-        for cshf in self.cashflows[c_id+1:-1]:
+        pv = cashflows[0].amount * df
+        for cshf in cashflows[1:-1]:
             df /= (1 + yld * yc_dcf) ** (c_dcf / yc_dcf)
             pv += cshf.amount * df
-        pv += self.cashflows[-1].amount * df
+        pv += cashflows[-1].amount * df
         pv -= self.acrrued_interest
         return pv * FACE_VALUE
     
@@ -89,16 +98,16 @@ class FixCouponBondSnap(BondSnap):
     
     def _yield_prime(self, yld: float, yield_params: BondYieldParameters, macaulay: bool = False) -> float:
         c_dcf = self._bond.get_coupon_dcf()
-        c_id = self.coupon_index
+        cashflows = self.cashflows
         yc_dcf = yield_params.get_period_dcf()
-        cd_dcf = yield_params.get_dcf(self.settle_date, self.cashflows[c_id].date)
+        cd_dcf = yield_params.get_dcf(self.settle_date, cashflows[0].date)
         df = 1 / (1 + yld * yc_dcf) ** (cd_dcf / yc_dcf)
-        pv_y = self.cashflows[c_id].amount * df * cd_dcf
-        for cshf in self.cashflows[c_id+1:-1]:
+        pv_y = cashflows[0].amount * df * cd_dcf
+        for cshf in cashflows[1:-1]:
             df /= (1 + yld * yc_dcf) ** (c_dcf / yc_dcf)
             cd_dcf += c_dcf
             pv_y += cshf.amount * df * cd_dcf
-        pv_y += self.cashflows[-1].amount * df * cd_dcf
+        pv_y += cashflows[-1].amount * df * cd_dcf
         return pv_y * FACE_VALUE / (1 if macaulay else (1 + yld * yc_dcf))
     
     def get_macaulay_duration(self, yield_params = BondYieldParameters()) -> float:
@@ -119,26 +128,26 @@ class FixCouponBondSnap(BondSnap):
     
     def get_price_from_zspread(self, spread: float, curve: RateCurve, yield_params = BondYieldParameters()) -> float:
         c_dcf = self._bond.get_coupon_dcf()
-        c_id = self.coupon_index
-        cd_i = self.cashflows[c_id].date
+        cashflows = self.cashflows
+        cd_i = cashflows[0].date
         cd_dcf = yield_params.get_dcf(self.settle_date, cd_i)
         settle_df = curve.get_df(self.settle_date)
         rate = yield_params._compounding.get_rate(curve.get_df(cd_i) / settle_df, cd_dcf)
         df = yield_params._compounding.get_df(rate + spread, cd_dcf)
-        pv = self.cashflows[c_id].amount * df
-        for cshf in self.cashflows[c_id+1:-1]:
+        pv = cashflows[0].amount * df
+        for cshf in cashflows[1:-1]:
             cd_i = cshf.date
             cd_dcf += c_dcf
             rate = yield_params._compounding.get_rate(curve.get_df(cd_i) / settle_df, cd_dcf)
             df = yield_params._compounding.get_df(rate + spread, cd_dcf)
             pv += cshf.amount * df
-        pv += self.cashflows[-1].amount * df
+        pv += cashflows[-1].amount * df
         pv -= self.acrrued_interest
         return pv * FACE_VALUE
     
     def get_price_from_curve(self, curve: RateCurve) -> float:
         pv = 0
-        for cshf in self.cashflows[self.coupon_index:]:
+        for cshf in self.cashflows:
             pv += cshf.amount * curve.get_df(cshf.date)
         pv /= curve.get_df(self.settle_date)
         pv -= self.acrrued_interest
@@ -147,7 +156,7 @@ class FixCouponBondSnap(BondSnap):
     def get_forward_price(self, date: dtm.date, repo_rate: float, repo_daycount = DayCount.ACT360) -> float:
         spot_pv = self._price / FACE_VALUE + self.acrrued_interest
         fwd_pv = spot_pv * (1 + repo_rate * repo_daycount.get_dcf(self.settle_date, date))
-        for cshf in self.cashflows[self.coupon_index:]:
+        for cshf in self.cashflows:
             if cshf.date <= date:
                 fwd_pv -= cshf.amount * (1 + repo_rate * repo_daycount.get_dcf(cshf.date, date))
             else:
@@ -158,7 +167,7 @@ class FixCouponBondSnap(BondSnap):
     def get_forward_price_curve(self, date: dtm.date, curve: RateCurve) -> float:
         spot_pv = self._price / FACE_VALUE + self.acrrued_interest
         fwd_pv = spot_pv * curve.get_df(self.settle_date) / curve.get_df(date)
-        for cshf in self.cashflows[self.coupon_index:]:
+        for cshf in self.cashflows:
             if cshf.date <= date:
                 fwd_pv -= cshf.amount * curve.get_df(cshf.date) / curve.get_df(date)
             else:
@@ -172,7 +181,7 @@ class FixCouponBondSnap(BondSnap):
         fwd_pv = price / FACE_VALUE
         realized_cash = 0
         realized_cash_dcf = 0
-        for cshf in self.cashflows[self.coupon_index:]:
+        for cshf in self.cashflows:
             if cshf.date <= date:
                 realized_cash += cshf.amount
                 realized_cash_dcf += cshf.amount * repo_daycount.get_dcf(cshf.date, date)

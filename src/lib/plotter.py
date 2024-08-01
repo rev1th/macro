@@ -27,7 +27,7 @@ def get_rates_curve_figure(fwd_curves: dict[str, dict[any, float]], zero_curves_
 def display_rates_curve(fwd_curves: dict[str, dict[any, float]], node_points: dict[str, dict[any, float]]) -> None:
     get_rates_curve_figure(fwd_curves, node_points).show()
 
-def get_bonds_curve_figure(bond_data: pd.DataFrame, bond_data2: pd.DataFrame = None):
+def get_bonds_curve_figure(bond_data: dict[str, pd.DataFrame], bond_data2: pd.DataFrame = None):
     x_name = 'Maturity'
     y_name = 'Yield'
     t_name = 'Name'
@@ -37,5 +37,5 @@ def get_bonds_curve_figure(bond_data: pd.DataFrame, bond_data2: pd.DataFrame = N
         y_name=y_name, y_format=',.4%',
         y2_name=y_name, y2_format=',.4%')
 
-def display_bonds_curve(bond_data: pd.DataFrame, bond_data2: pd.DataFrame = None) -> None:
-    get_bonds_curve_figure(bond_data, bond_data2).show()
+def display_bonds_curve(*args, **kwargs) -> None:
+    get_bonds_curve_figure(*args, **kwargs).show()

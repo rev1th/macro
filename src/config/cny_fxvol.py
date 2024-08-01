@@ -5,7 +5,7 @@ from volatility.models.fx_vol_surface_builder import FXVolQuote, FXVolSurfaceMod
 from volatility.models.vol_types import VolatilityQuoteType
 
 import data_api.cfets as cfets_api
-from models.rate_curve_builder import get_rate_curve
+from models.curve_context import CurveContext
 
 
 def get_fx_vols() -> dict[str, list[FXVolQuote]]:
@@ -30,7 +30,7 @@ def construct():
     bd_adjust = BDayAdjust(BDayAdjustType.Following, calendar)
 
     value_date, vol_quotes = get_fx_vols()
-    fx_curve = get_rate_curve('CNY-USD', value_date)
+    fx_curve = CurveContext().get_rate_curve('CNY-USD', value_date)
     vol_data = {}
     for t, quotes in vol_quotes.items():
         expiry_date = Tenor(t).get_date(value_date, bd_adjust)

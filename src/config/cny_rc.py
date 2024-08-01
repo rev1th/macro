@@ -9,7 +9,7 @@ from common.currency import Currency
 import data_api.cfets as cfets_api
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
 from instruments.rate_curve_instrument import Deposit
-from instruments.swap import DomesticSwap
+from instruments.swap import SwapTemplate, DomesticSwap
 from instruments.fx import FXSwapC, FXSpot
 
 logger = logging.Logger(__name__)
@@ -19,18 +19,18 @@ def get_swaps_curve(fixing_type: str = 'FR007') -> tuple[dtm.date, list[Domestic
     data_date, swap_prices = cfets_api.load_swaps(fixing_type)
     if fixing_type == 'FR007':
         data_date, rates = cfets_api.load_fixings('FR')
-        deposit = Deposit(Tenor('7D'), name=fixing_type)
-        deposit.set_market(data_date, rates[fixing_type] / 100)
+        deposit = Deposit(Tenor('7D').get_date(data_date), name=fixing_type)
+        deposit.data[data_date] = rates[fixing_type] / 100
         swap_convention = 'CNY_7DR'
     elif fixing_type == 'Shibor3M':
         data_date, rates = cfets_api.load_fixings('Shibor')
-        deposit = Deposit(Tenor('3M'), name=fixing_type)
-        deposit.set_market(data_date, rates['3M'] / 100)
+        deposit = Deposit(Tenor('3M').get_date(data_date), name=fixing_type)
+        deposit.data[data_date] = rates['3M'] / 100
         swap_convention = 'CNY_SHIBOR'
     swap_instruments = [deposit]
     for tenor, rate in swap_prices.items():
-        ins = DomesticSwap(_convention_name=swap_convention, _end=Tenor(tenor), name=f'{swap_convention}_{tenor}')
-        ins.set_market(data_date, rate)
+        ins = SwapTemplate(swap_convention, Tenor(tenor), name=f'{swap_convention}_{tenor}').to_trade(data_date)
+        ins.set_data(data_date, rate)
         swap_instruments.append(ins)
     return data_date, swap_instruments
 

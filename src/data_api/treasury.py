@@ -71,7 +71,7 @@ def load_bonds_details(start: dtm.date):
             assert bond_type in ('Bill', 'FRN'), f'Invalid coupon rate for {bond_type}'
             coupon = 'NULL'
         insert_rows.append(f"""
-    ('{bi['id']}', '{bond_type}', '{maturity_date}', {coupon}, '{issue_date}', '{original_term}')""")
+    ('{bi['cusip']}', '{bond_type}', '{maturity_date}', {coupon}, '{issue_date}', '{original_term}')""")
     if insert_rows:
         insert_query = f"INSERT OR IGNORE INTO {BONDS_REF_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, META_DB)
@@ -79,7 +79,6 @@ def load_bonds_details(start: dtm.date):
         return True
 
 def get_bonds_term() -> dict[str, str]:
-    # load_bonds_details(dtm.date(1995, 1, 1))
     select_query = f"SELECT id, original_term FROM {BONDS_REF_TABLE} WHERE type IN ('Bond', 'Note')"
     term_res = sql.fetch(select_query, META_DB)
     return dict(term_res)
@@ -114,6 +113,11 @@ def get_coupon_bonds(date: dtm.date) -> list[FixCouponBond]:
         bonds_list.append(FixCouponBond(maturity_date, row[2], Frequency.SemiAnnual, issue_date,
                                         _original_term=term, _settle_delay=settle_delay, name=row[0]))
     return bonds_list
+
+if __name__ == '__main__':
+    # start = dtm.date(1994, 1, 1)
+    start = dtm.date(2024, 8, 1)
+    load_bonds_details(start)
 
 # create_query = f"""CREATE TABLE {BONDS_REF_TABLE} (
 #     id TEXT, type TEXT, maturity TEXT, coupon REAL, original_issue_date TEXT, original_term TEXT,

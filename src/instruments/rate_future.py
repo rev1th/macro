@@ -9,9 +9,10 @@ from common.models.future import Future
 from instruments.rate_curve_instrument import CurveInstrument
 from common.chrono.tenor import Tenor, get_bdate_series
 from common.chrono.daycount import DayCount
-from instruments.fixing import get_fixing
 from instruments.rate_curve import RateCurve
 from instruments.vol_curve import VolCurve
+from lib.rate_helper import get_forecast_rate
+from models.data_context import DataContext
 
 
 @dataclass
@@ -20,9 +21,6 @@ class RateFuture(Future):
     _rate_end_date: dtm.date = None
 
     _convexity: ClassVar[float]
-
-    def underlying_rate(self, date: dtm.date) -> float:
-        return get_fixing(self.underlying, date)
     
     def get_settle_rate(self, date: dtm.date, curve: RateCurve) -> float:
         "Get settlement rate for RateFuture"
@@ -53,17 +51,17 @@ class RateFutureC(RateFuture, CurveInstrument):
         return self.notional * (1 - settle_rate - (price + self._convexity) / 100)
 
 @dataclass
-class RateFutureIMM(RateFutureC):
+class RateFutureCompound(RateFutureC):
 
     def __post_init__(self):
         super().__post_init__()
         self._rate_end_date = self.settle_date
     
     def get_settle_rate(self, _: dtm.date, curve: RateCurve) -> float:
-        return curve.get_forecast_rate(self._rate_start_date, self.settle_date, self.underlying)
+        return get_forecast_rate(self._rate_start_date, self._rate_end_date, curve, self.underlying)
 
 @dataclass
-class RateFutureSerial(RateFutureC):
+class RateFutureAverage(RateFutureC):
     _rate_start_date: dtm.date = field(init=False)
 
     def __post_init__(self):
@@ -83,13 +81,14 @@ class RateFutureSerial(RateFutureC):
     def get_settle_rate(self, date: dtm.date, curve: RateCurve) -> float:
         settle_rate = 0
         bdates = self.fixing_dates
+        context = DataContext()
         for di in range(0, len(bdates)-1):
             date_i = bdates[di]
             date_i_next = bdates[di+1]
             if date_i >= date:
                 rate_fix = curve.get_forward_rate(date_i, date_i_next)
             else:
-                rate_fix = self.underlying_rate(date_i)
+                rate_fix = context.get_fixing(self.underlying, date_i)
             settle_rate += rate_fix * (date_i_next - date_i).days
             date_i = date_i_next
         

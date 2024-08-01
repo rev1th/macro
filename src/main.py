@@ -27,10 +27,13 @@ def evaluate_rates_curves(start_date = None, end_date = None, ccys: list[str] = 
     return res
 
 _CACHED_DATA = {}
-def evaluate_bonds_curves(value_date = None, **kwargs):
-    bcm_us = usd_bonds.construct(value_date, **kwargs)
-    bcm_us.build()
-    _CACHED_DATA[value_date] = bcm_us
+def evaluate_bonds_curves(start_date = None, end_date = None, **kwargs):
+    bcm_us = []
+    for date in usd_mkt.get_valuation_dates(start_date, end_date):
+        bcm_us_dt = usd_bonds.construct(date, **kwargs)
+        bcm_us_dt.build()
+        _CACHED_DATA[date] = bcm_us_dt
+        bcm_us.append(bcm_us_dt)
     return [bcm_us]
 
 def evaluate_bonds_roll(curve_date = None, trade_date = None):

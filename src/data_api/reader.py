@@ -3,15 +3,11 @@ from sortedcontainers import SortedDict
 
 from data_api import nyfed, cme
 from instruments.fixing import Fixing, FixingCurve
-from instruments.rate_future import RateFutureIMM, RateFutureSerial
+from instruments.rate_future import RateFutureCompound, RateFutureAverage
 from instruments.swap_convention import SwapConvention, SwapFixLegConvention, SwapFloatLegConvention
 from instruments.bond_future import BondFuture
 from common import sql
 from data_api.config import META_DB
-
-NAME_ID = 'productCode'
-EXPIRY_ID = 'lastTrade'
-SETTLE_ID = 'settlement'
 
 
 def read_fixings(code: str, from_date: dtm.date) -> FixingCurve:
@@ -20,20 +16,20 @@ def read_fixings(code: str, from_date: dtm.date) -> FixingCurve:
         res[d] = v / 100
     return FixingCurve(res, name=code)
 
-def read_IMM_futures(code: str) -> list[RateFutureIMM]:
+def read_IMM_futures(code: str) -> list[RateFutureCompound]:
     contracts_list = cme.get_futures_contracts(code)
     imm_q_list = [row for row in contracts_list if row[1].month %3==0]
     expiries = []
     for id in range(1, len(imm_q_list)):
         row = imm_q_list[id]
-        expiries.append(RateFutureIMM(Fixing(name=row[3]), _expiry=row[1], _settle=row[2],
-                _rate_start_date=imm_q_list[id-1][2], name=row[0]))
+        expiries.append(RateFutureCompound(Fixing(name=row[3]), _expiry=row[1], _settle=row[2],
+                _rate_start_date=imm_q_list[id-1][2], _lot_size=row[4], name=row[0]))
     return expiries
 
-def read_serial_futures(code: str) -> list[RateFutureSerial]:
+def read_serial_futures(code: str) -> list[RateFutureAverage]:
     contracts_list = cme.get_futures_contracts(code)
-    expiries = [RateFutureSerial(Fixing(name=row[3]), _expiry=row[1], _settle=row[2],
-                name=row[0]) for row in contracts_list]
+    expiries = [RateFutureAverage(Fixing(name=row[3]), _expiry=row[1], _settle=row[2],
+                _lot_size=row[4], name=row[0]) for row in contracts_list]
     return expiries
 
 def read_bond_futures(code: str) -> list[BondFuture]:
@@ -41,6 +37,11 @@ def read_bond_futures(code: str) -> list[BondFuture]:
     expiries = [BondFuture(_expiry=row[1], _first_delivery=row[2], _last_delivery=row[3],
                 name=row[0]) for row in contracts_list]
     return expiries
+
+def read_future_codes(code: str) -> list[str]:
+    select_query = f"SELECT future_code FROM futures WHERE underlier_code='{code}'"
+    future_codes = sql.fetch(select_query, META_DB)
+    return [fc[0] for fc in future_codes]
 
 def read_meeting_dates(code: str) -> list[dtm.date]:
     select_query = f"SELECT date FROM meeting_dates WHERE bank='{code}' ORDER BY date ASC"

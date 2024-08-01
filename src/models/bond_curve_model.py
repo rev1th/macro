@@ -13,7 +13,7 @@ from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
 from instruments.bond import BondSnap, BondYieldParameters
-import models.rate_curve_builder as rcb
+from models.curve_context import CurveContext
 
 logger = logging.Logger(__name__)
 
@@ -25,10 +25,7 @@ class BondCurveModel(NameDateClass):
     _bonds: list[tuple[BondSnap, float]]
     
     def base_curve(self):
-        return rcb.get_rate_curve(self._base_curve, self.date)
-    
-    def bonds(self):
-        return [br[0] for br in self._bonds]
+        return CurveContext().get_rate_curve(self._base_curve, self.date)
     
     def build(self) -> True:
         """Builds bond curve"""
@@ -97,17 +94,25 @@ class BondCurveModelNS(BondCurveModel):
 # Non-parametric
 @dataclass
 class BondCurveModelNP(BondCurveModel):
-    node_tenors: list[str]
+    _node_tenors: list[str] | None
 
     spread_curve: ClassVar[SpreadCurve]
 
+    def __post_init__(self):
+        wsum = sum(wi for _, wi in self._bonds)
+        self.bonds_weight = [(bond, wi/wsum) for bond, wi in self._bonds if wi > 0]
+        if self._node_tenors:
+            self.nodes = [(Tenor(ndt).get_date(self.date), 1) for ndt in self._node_tenors]
+        else:
+            self.nodes = [(bond.maturity_date, 1) for bond, _ in self.bonds_weight]
+        self.nodes.sort()
+    
     def get_solver_error(self, values: list[float]) -> float:
         curve = self.spread_curve
         curve.update_nodes(log_values=values)
         err = 0
-        for bond, wi in self._bonds:
-            if wi > 0:
-                err += wi * (bond.get_price_from_curve(curve) - bond.price) ** 2
+        for bond, wi in self.bonds_weight:
+            err += wi * (bond.get_price_from_curve(curve) - bond.price) ** 2
         # n_dates = [self.date] + [nd.date for nd in curve.nodes]
         # r_values = [curve.get_forward_rate(n_dates[n_id], n_dates[n_id+1]) for n_id in range(len(values))]
         # for r_id in range(1, len(r_values)):
@@ -119,15 +124,13 @@ class BondCurveModelNP(BondCurveModel):
         curve.update_nodes(log_values=values)
         error_primes = np.zeros(len(values), dtype=float)
         nodes = [RateCurveNode(self.date, 1)] + curve.nodes
-        for bond, wi in self._bonds:
-            if not wi > 0:
-                continue
+        for bond, wi in self.bonds_weight:
             price_error = wi * (bond.get_price_from_curve(curve) - bond.price)
             price_prime = np.zeros(len(values), dtype=float)
             n_id = 0
             for cshf in bond.cashflows:
                 cshf_pv = cshf.amount * curve.get_df(cshf.date)
-                if cshf.date > nodes[n_id+1].date:
+                while cshf.date > nodes[n_id+1].date:
                     n_id += 1
                 date_ratio = (cshf.date - nodes[n_id].date) / (nodes[n_id+1].date - nodes[n_id].date)
                 price_prime[n_id] += cshf_pv * date_ratio
@@ -146,22 +149,18 @@ class BondCurveModelNP(BondCurveModel):
         return True
     
     def build(self):
-        wsum = sum(wi for _, wi in self._bonds)
-        self._bonds = [(bond, wi/wsum) for bond, wi in self._bonds]
         base_curve = self.base_curve()
-        base_date = base_curve.date
-        nodes = [(Tenor(ndt).get_date(base_date), 1) for ndt in self.node_tenors]
-        self.spread_curve = SpreadCurve(base_date, nodes, base_curve,
+        self.spread_curve = SpreadCurve(base_curve.date, self.nodes, base_curve,
                                         interpolation_methods=[(None, 'LogLinear')],
                                         _daycount_type=base_curve._daycount_type,
                                         _calendar=base_curve._calendar,
-                                        name=base_curve.name)
-        update_bond_curve(self.spread_curve)
+                                        name=self.name)
+        CurveContext().update_bond_curve(self.spread_curve)
         return self.build_solver()
     
     def get_graph_info(self):
         bond_measures = []
-        curve = rcb.get_rate_curve(self._base_curve, self.date)
+        curve = CurveContext().get_rate_curve(self._base_curve, self.date)
         yield_method = BondYieldParameters()
         for bnd, _ in self._bonds:
             date = bnd.maturity_date
@@ -174,10 +173,5 @@ class BondCurveModelNP(BondCurveModel):
         bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Asset Spread', 'ZSpread', 'Name'])
         bond_df.set_index('Maturity', inplace=True)
         bond_df.sort_index(inplace=True)
-        return bond_df, None
-
-_BOND_CURVE_CACHE: dict[str, SpreadCurve] = {}
-def update_bond_curve(curve: SpreadCurve) -> None:
-    _BOND_CURVE_CACHE[(curve.name, curve.date)] = curve
-def get_bond_curve(name: str, date: dtm.date):
-    return _BOND_CURVE_CACHE[(name, date)]
+        prefix = f"{dtm.datetime.strftime(self.date, '%d-%b')}:"
+        return {prefix: bond_df}, None

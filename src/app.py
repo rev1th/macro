@@ -94,13 +94,13 @@ app.layout = html.Div([
 )
 def refresh_date(*_):
     current_date = dtm.date.today()
-    return current_date - dtm.timedelta(7), current_date
+    return dtm.date(2024, 7, 15), current_date
 
 
 @callback(
     Output(component_id='rates-curves', component_property='children'),
     Output(component_id='rates-curves-status', component_property='children'),
-    Input(component_id='val-date-picker', component_property='start_date'),
+    State(component_id='val-date-picker', component_property='start_date'),
     Input(component_id='val-date-picker', component_property='end_date'),
     Input(component_id='rates-ccy-dropdown', component_property='value'),
     Input(component_id='load_rates_curves', component_property='n_clicks'),
@@ -135,18 +135,26 @@ def load_rates_curves(start_date_str: str, end_date_str: str, ccys: list[str], *
 @callback(
     Output(component_id='bonds-curves', component_property='children'),
     Output(component_id='bonds-curves-status', component_property='children'),
+    State(component_id='val-date-picker', component_property='start_date'),
     State(component_id='val-date-picker', component_property='end_date'),
     # Input(component_id='rates-curves', component_property='children'),
     Input(component_id='bonds-weight-dropdown', component_property='value'),
     Input(component_id='load_bonds_curves', component_property='n_clicks'),
     prevent_initial_call=True,
 )
-def load_bonds_curves(date_str: str, weight_type: str, *_):
-    value_date = dtm.date.fromisoformat(date_str) if date_str else None
+def load_bonds_curves(start_date_str: str, end_date_str: str, weight_type: str, *_):
+    start_date = dtm.date.fromisoformat(start_date_str) if start_date_str else None
+    end_date = dtm.date.fromisoformat(end_date_str) if end_date_str else None
     b_tabvals = []
     try:
-        for bcm in main.evaluate_bonds_curves(value_date, weight_type=weight_type):
-            fig = plotter.get_bonds_curve_figure(*bcm.get_graph_info())
+        for bcm_arr in main.evaluate_bonds_curves(start_date, end_date, weight_type=weight_type):
+            graph_info = ({}, {})
+            for bcm in bcm_arr:
+                graph_info_dt = bcm.get_graph_info()
+                for id, value in enumerate(graph_info_dt):
+                    if value:
+                        graph_info[id].update(value)
+            fig = plotter.get_bonds_curve_figure(*graph_info)
             b_tabvals.append(dcc.Tab(children=[
                 dcc.Graph(figure=fig, style=_GRAPH_STYLE),
                 html.Div([dcc.DatePickerSingle(
@@ -159,7 +167,7 @@ def load_bonds_curves(date_str: str, weight_type: str, *_):
                     id='bonds-pricer-status',
                     type='default',
                 ),
-                html.Div(id='bonds-pricer'),
+                # html.Div(id='bonds-pricer'),
             ], label=bcm.name))
         return dcc.Tabs(children=b_tabvals), None
     except Exception as ex:
@@ -194,8 +202,8 @@ def recalc_bonds(trade_date_str: str, curve_date_str: str):
 @callback(
     Output(component_id='bond-futures', component_property='children'),
     Output(component_id='bond-futures-status', component_property='children'),
-    Input(component_id='val-date-picker', component_property='start_date'),
-    Input(component_id='val-date-picker', component_property='end_date'),
+    State(component_id='val-date-picker', component_property='start_date'),
+    State(component_id='val-date-picker', component_property='end_date'),
     Input(component_id='load_bond_futures', component_property='n_clicks'),
     prevent_initial_call=True,
 )

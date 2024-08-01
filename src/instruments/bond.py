@@ -21,7 +21,6 @@ class BondPriceType(StrEnum):
 class CashFlow:
     date: dtm.date
     amount: float
-    start_date: dtm.date | None = None
 
 
 @dataclass

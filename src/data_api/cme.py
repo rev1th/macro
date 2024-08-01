@@ -20,8 +20,9 @@ MONTHMAP['JLY'] = MONTHMAP['JUL']
 DATE_FORMAT = "%m/%d/%Y"
 ENCODE_FORMAT = 'utf-8'
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
     'Accept-Language': 'en',
+    'Cookie': "",
 }
 
 def get_month_code(month: str) -> str:
@@ -85,7 +86,7 @@ FUTPRODCODE_MAP = {
 }
 
 FUT_TABLE = 'futures'
-FUTPROD_TABLE = 'futures_contracts'
+FUTPROD_TABLE = 'rate_futures_contracts'
 BONDFUTPROD_TABLE = 'bond_futures_contracts'
 FUTPROD_DATE_FORMAT = '%d %b %Y'
 
@@ -136,13 +137,14 @@ def update_bond_futures_list(code: str):
     return True
 
 def get_futures_contracts(code: str):
-    underlier_query = f"SELECT underlier_code FROM {FUT_TABLE} WHERE future_code='{code}'"
-    underlier = sql.fetch(underlier_query, META_DB, count=1)[0]
+    underlier_query = f"SELECT underlier_code, lot_size FROM {FUT_TABLE} WHERE future_code='{code}'"
+    underlier, lot_size = sql.fetch(underlier_query, META_DB, count=1)
     contracts_query = f"""SELECT contract_code, last_trade_date, settlement_date
     FROM {FUTPROD_TABLE} WHERE future_code='{code}'"""
     contracts_list = sql.fetch(contracts_query, META_DB)
     contracts_fmt = [(row[0], dtm.datetime.strptime(row[1], sql.DATE_FORMAT).date(),
-                    dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date(), underlier) for row in contracts_list]
+                    dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date(), underlier, lot_size)
+                    for row in contracts_list]
     return contracts_fmt
 
 def get_bond_futures_contracts(code: str):
@@ -173,7 +175,7 @@ def load_fut_data_dates(code: str = 'SR1') -> list[dtm.date]:
         settle_dates.append(dtm.datetime.strptime(dr[0], DATE_FORMAT).date())
     return settle_dates
 
-FUTURES_CLOSE_TABLE = 'futures_closes'
+FUTURES_PRICE_TABLE = 'futures_settle'
 FUTPROD_TICKS = {
     'ZT': {'extra_tick_count': 8},
     'ZF': {'extra_tick_count': 4},
@@ -199,14 +201,14 @@ def load_future_settle_prices(code: str, settle_date: dtm.date):
             insert_rows.append(f"""
     ('{contract_code}', '{settle_date.strftime(sql.DATE_FORMAT)}', {settle_price}, {volume}, {oi})""")
     if insert_rows:
-        insert_query = f"INSERT INTO {FUTURES_CLOSE_TABLE} VALUES {','.join(insert_rows)};"
+        insert_query = f"INSERT INTO {FUTURES_PRICE_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, PRICES_DB)
     else:
         return True
 
 MIN_MAX_OI = 0.01
 def get_fut_settle_prices(code: str, settle_date: dtm.date):
-    price_query = f"""SELECT contract_code, close_price, open_interest FROM {FUTURES_CLOSE_TABLE} 
+    price_query = f"""SELECT contract_code, close_price, open_interest FROM {FUTURES_PRICE_TABLE} 
     WHERE contract_code LIKE '{code}%' AND date='{settle_date.strftime(sql.DATE_FORMAT)}'"""
     prices_list = sql.fetch(price_query, PRICES_DB)
     if not prices_list:
@@ -245,7 +247,7 @@ def load_future_quotes(code: str):
         if is_valid_price(settle_price):
             settle_price = transform_quote(settle_price, price_params)
             expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
-            contract_month = FUTPRODCODE_MAP.get(code, code) + f"{expiry_code[0]}{expiry_month[2:4]}"
+            contract_month = f"{code}{expiry_code[0]}{expiry_month[2:4]}"
             if volume > max_volume * MIN_MAX_VOLUME and settle_price > 0:
                 res[contract_month] = settle_price
     return (trade_date, res)
@@ -253,8 +255,8 @@ def load_future_quotes(code: str):
 SWAP_URL = 'https://www.cmegroup.com/services/sofr-strip-rates/'
 SWAP_DATE_FORMAT = '%Y%m%d'
 SWAP_MAP = {
-    'SOFR': "sofrRates",
-    'SOFR_FF': "sofrFedFundRates",
+    'USD_SOFR': "sofrRates",
+    'USD_FF_SOFR': "sofrFedFundRates",
 }
 SWAP_RATES_TABLE = 'swap_rates'
 def load_swap_data():
@@ -346,9 +348,9 @@ if __name__ == '__main__':
 # )"""
 #         sql.modify(insert_query)
 
-# create_query = f"""CREATE TABLE {FUTURES_CLOSE_TABLE} (
+# create_query = f"""CREATE TABLE {FUTURES_PRICE_TABLE} (
 #     contract_code TEXT, date TEXT, close_price REAL, volume INTEGER, open_interest INTEGER,
-#     CONSTRAINT {FUTURES_CLOSE_TABLE}_pk PRIMARY KEY (contract_code, date)
+#     CONSTRAINT {FUTURES_PRICE_TABLE}_pk PRIMARY KEY (contract_code, date)
 # )"""
 # sql.modify(create_query, PRICES_DB)
 # create_query = f"""CREATE TABLE {SWAP_RATES_TABLE} (

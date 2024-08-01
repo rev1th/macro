@@ -117,16 +117,10 @@ class SwapConvention:
     @property
     def leg1(self):
         return self._leg1
-
+    
     @property
     def leg2(self):
         return self._leg2
-
-
-SWAP_CONVENTION_MAP: dict[str, SwapConvention] = {}
-
-def add_swap_convention(conv: SwapConvention) -> None:
-    SWAP_CONVENTION_MAP[conv._code] = conv
-
-def get_swap_convention(name: str):
-    return SWAP_CONVENTION_MAP[name]
+    
+    def is_basis(self):
+        return isinstance(self._leg1, SwapFloatLegConvention) and isinstance(self._leg2, SwapFloatLegConvention)
