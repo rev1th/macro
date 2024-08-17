@@ -1,4 +1,3 @@
-
 from pydantic.dataclasses import dataclass
 from typing import ClassVar
 import logging
@@ -12,7 +11,7 @@ from common.chrono.tenor import Tenor
 from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
-from instruments.bond import BondSnap, BondYieldParameters
+from instruments.bond import Bond, BondYieldParameters
 from models.curve_context import CurveContext
 
 logger = logging.Logger(__name__)
@@ -22,7 +21,7 @@ logger = logging.Logger(__name__)
 class BondCurveModel(NameDateClass):
 
     _base_curve: str
-    _bonds: list[tuple[BondSnap, float]]
+    _bonds: list[tuple[Bond, float]]
     
     def base_curve(self):
         return CurveContext().get_rate_curve(self._base_curve, self.date)
@@ -57,8 +56,8 @@ class BondCurveNS(NameDateClass):
     _coeffs: tuple[float, float, float]
     _decay_rate: float
 
-    def get_rate(self, bond: BondSnap) -> float:
-        dcf = self._daycount.get_dcf(bond.settle_date, bond.maturity_date)
+    def get_rate(self, bond: Bond) -> float:
+        dcf = self._daycount.get_dcf(bond.settle_date(self.date), bond.maturity_date)
         decay_rate = self._decay_rate
         decay_factor = np.exp(-self._decay_rate * dcf)
         slope_factor = (1 - decay_factor) / (decay_rate * dcf)
@@ -84,7 +83,7 @@ class BondCurveModelNS(BondCurveModel):
     def build(self):
         x_in = self.get_factor_params()
         crv = self.base_curve()
-        y = [bond.get_zspread(crv) for bond, _ in self._bonds]
+        y = [bond.get_zspread(self.date, crv) for bond, _ in self._bonds]
         # x_in = sm.add_constant(r_v[0], prepend=False)
         res = sm.OLS(y, x_in).fit()
         self.curve = BondCurveNS(self.date, self._base_curve, self._daycount, tuple(res.params), self._decay_rate)
@@ -112,7 +111,7 @@ class BondCurveModelNP(BondCurveModel):
         curve.update_nodes(log_values=values)
         err = 0
         for bond, wi in self.bonds_weight:
-            err += wi * (bond.get_price_from_curve(curve) - bond.price) ** 2
+            err += wi * (bond.get_price_from_curve(self.date, curve) - bond.price(self.date)) ** 2
         # n_dates = [self.date] + [nd.date for nd in curve.nodes]
         # r_values = [curve.get_forward_rate(n_dates[n_id], n_dates[n_id+1]) for n_id in range(len(values))]
         # for r_id in range(1, len(r_values)):
@@ -125,10 +124,10 @@ class BondCurveModelNP(BondCurveModel):
         error_primes = np.zeros(len(values), dtype=float)
         nodes = [RateCurveNode(self.date, 1)] + curve.nodes
         for bond, wi in self.bonds_weight:
-            price_error = wi * (bond.get_price_from_curve(curve) - bond.price)
+            price_error = wi * (bond.get_price_from_curve(self.date, curve) - bond.price(self.date))
             price_prime = np.zeros(len(values), dtype=float)
             n_id = 0
-            for cshf in bond.cashflows:
+            for cshf in bond.get_cashflows(self.date):
                 cshf_pv = cshf.amount * curve.get_df(cshf.date)
                 while cshf.date > nodes[n_id+1].date:
                     n_id += 1
@@ -167,7 +166,7 @@ class BondCurveModelNP(BondCurveModel):
             bond_measures.append([
                 date,
                 self.spread_curve.get_spread_rate(date, yield_method._compounding),
-                bnd.get_zspread(curve),
+                bnd.get_zspread(self.date, curve),
                 bnd.display_name(),
             ])
         bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Asset Spread', 'ZSpread', 'Name'])

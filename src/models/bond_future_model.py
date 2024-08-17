@@ -1,4 +1,3 @@
-
 from pydantic.dataclasses import dataclass
 import pandas as pd
 
@@ -15,9 +14,9 @@ class BondFutureModel(NameDateClass):
         res = []
         curve = CurveContext().get_rate_curve(self._curve_name, self.date)
         for bf in self._instruments:
-            for bfb in bf.get_basket_metrics(curve):
+            for bfb in bf.get_basket_metrics(self.date, curve):
                 res.append((bf.name, self.date, bf.expiry, bf.data[self.date],
                             bfb.bond.display_name(), bfb.conversion_factor, 
-                            bfb.delivery_date, bfb.net_basis, bfb.repo))
+                            bfb.ctd_date, bfb.net_basis, bfb.repo_rate))
         return pd.DataFrame(res, columns=['Name', 'Date', 'Expiry', 'Price', 'Bond', 'Conversion Factor',
                                         'Delviery Date', 'Net Basis', 'Implied Repo'])

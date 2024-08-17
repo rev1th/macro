@@ -1,33 +1,32 @@
-
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 import datetime as dtm
-from typing import Optional, ClassVar, Self
+from typing import Optional, ClassVar
 
 from common.models.future import Future
-from instruments.coupon_bond import FixCouponBondSnap
+from instruments.coupon_bond import FixCouponBond
 from instruments.rate_curve import RateCurve
 
 
 @dataclass
 class BondFutureBond:
-    bond: FixCouponBondSnap
+    bond: FixCouponBond
     conversion_factor: float
 
-    delivery_date: Optional[dtm.date] = None
-    repo: ClassVar[float]
+    ctd_date: Optional[dtm.date] = None
+    repo_rate: ClassVar[float]
     net_basis: ClassVar[float]
     
-    def set_delivery(self, date: dtm.date, fut_price: float, curve: RateCurve) -> None:
-        self.delivery_date = date
-        bond_fut_implied = fut_price * self.conversion_factor
-        self.repo = self.bond.get_forward_repo(date, bond_fut_implied)
-        bond_fwd_price = self.bond.get_forward_price_curve(date, curve)
-        self.net_basis = bond_fut_implied - bond_fwd_price
-
-    def __lt__(self, other: Self):
+    def set_ctd(self, trade_date: dtm.date, fut_price: float, delivery_dates: list[dtm.date], curve: RateCurve) -> None:
+        fut_implied = fut_price * self.conversion_factor
+        fwd_prices = [(self.bond.get_forward_price_curve(trade_date, date, curve), date) for date in delivery_dates]
+        fwd_prices.sort(reverse=True)
+        ctd_price, self.ctd_date = fwd_prices[0]
+        self.net_basis = fut_implied - ctd_price
+        self.repo_rate = self.bond.get_forward_repo(trade_date, self.ctd_date, fut_implied)
+    
+    def __lt__(self, other):
         return self.net_basis < other.net_basis
-
 
 @dataclass
 class BondFuture(Future):
@@ -37,18 +36,11 @@ class BondFuture(Future):
 
     _underlying: Optional[str] = field(init=False, default=None)
     _settle: Optional[dtm.date] = field(init=False, default=None)
-
-    @property
-    def first_delivery(self):
-        return self._first_delivery
     
-    def get_basket_metrics(self, curve: RateCurve, early: bool = False) -> list[BondFutureBond]:
+    def get_basket_metrics(self, date: dtm.date, curve: RateCurve) -> list[BondFutureBond]:
         for bfb in self._basket_bonds:
-            if early:
-                delivery_date = max(self._first_delivery, bfb.bond.settle_date)
-            else:
-                delivery_date = self._last_delivery
-            bfb.set_delivery(delivery_date, self.data[curve.date], curve)
+            delivery_dates = [max(self._first_delivery, bfb.bond.settle_date(date)), self._last_delivery]
+            bfb.set_ctd(date, self.data[date], delivery_dates, curve)
         return sorted(self._basket_bonds, reverse=True)
     
     def get_ctd(self):

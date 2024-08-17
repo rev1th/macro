@@ -1,4 +1,3 @@
-
 import datetime as dtm
 import logging
 
@@ -7,7 +6,7 @@ from instruments.rate_future import RateFutureC
 from instruments.rate_curve_instrument import Deposit
 from instruments.swap import SwapTemplate, SwapTrade
 from instruments.vol_curve import VolCurve
-from config import usd_mkt
+from markets import usd_lib
 import data_api.reader as data_reader
 import data_api.cme as cme_api
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
@@ -50,12 +49,6 @@ def get_swaps_curve(val_date: dtm.date, code: str, cutoff: dtm.date = None) -> l
     swap_instruments.sort()
     return swap_instruments
 
-def get_meeting_dates(val_date: dtm.date, effective_t = Tenor('1B')) -> list[dtm.date]:
-    meeting_dates = data_reader.read_meeting_dates('FED')
-    # meeting_dates.sort()
-    meeting_dates_eff = [effective_t.get_date(dt) for dt in meeting_dates if dt >= val_date]
-    return meeting_dates_eff
-
 def set_step_knots(fut_instruments: list, step_dates: list[dtm.date]) -> dtm.date:
     if not step_dates:
         return None
@@ -80,6 +73,9 @@ def _init():
         CONFIG_CONTEXT.add_futures(code, data_reader.read_IMM_futures(code))
     for code in ['SR1', 'FF']:
         CONFIG_CONTEXT.add_futures(code, data_reader.read_serial_futures(code))
+    effective_t = Tenor.bday(1, usd_lib.CALENDAR)
+    meeting_dates_eff = [effective_t.get_date(dt) for dt in data_reader.read_meeting_dates('FED')]
+    CONFIG_CONTEXT.add_meeting_nodes('FED', meeting_dates_eff)
     
     for row in data_reader.read_swap_conventions():
         CONFIG_CONTEXT.add_swap_convention(row)
@@ -87,19 +83,19 @@ def _init():
     DATA_CONTEXT = DataContext()
     first_date = Tenor('-3m').get_date(dtm.date.today())
     for code in ['SOFR', 'EFFR']:
-        DATA_CONTEXT.add_fixing_curve(data_reader.read_fixings(code, from_date=first_date))
+        DATA_CONTEXT.add_fixing_curve(code, data_reader.read_fixings(code, from_date=first_date))
 
 
 def construct(val_dt: dtm.date = None):
-    last_val_date = usd_mkt.get_last_valuation_date()
+    last_val_date = usd_lib.get_last_valuation_date()
     if not CONFIG_CONTEXT:
         _init()
     if not val_dt:
         val_dt = last_val_date
     live = val_dt > last_val_date
     
-    next_btenor = Tenor.bday(1, usd_mkt.CALENDAR)
-    meeting_dates_eff = get_meeting_dates(val_dt, effective_t=next_btenor)
+    next_btenor = Tenor.bday(1, usd_lib.CALENDAR)
+    meeting_dates_eff = [dt for dt in CONFIG_CONTEXT.get_meeting_nodes('FED') if dt >= val_dt]
 
     # SOFR - OIS
     fixing_name = 'SOFR'
@@ -148,10 +144,10 @@ def construct(val_dt: dtm.date = None):
         interps = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')]
     ff_curve_defs = [RateCurveModel(ff_curve_instruments,
                     _interpolation_methods=interps, _rate_vol_curve=ff_rate_vol_curve,
-                    _collateral_curve='USD-SOFR', _spread_from='USD-SOFR', name='FF')]
+                    _collateral_curve='USD-SOFR', _spread_from='USD-SOFR', name=fixing_name)]
     
     return [
-        RateCurveGroupModel(val_dt, curve_defs, _calendar=usd_mkt.CALENDAR, name='USD'),
-        RateCurveGroupModel(val_dt, ff_curve_defs, _calendar=usd_mkt.CALENDAR, name='USD'),
+        RateCurveGroupModel(val_dt, curve_defs, _calendar=usd_lib.CALENDAR, name='USD'),
+        RateCurveGroupModel(val_dt, ff_curve_defs, _calendar=usd_lib.CALENDAR, name='USD'),
     ]
 

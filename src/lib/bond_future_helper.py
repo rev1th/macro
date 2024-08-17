@@ -2,7 +2,7 @@ from pydantic.dataclasses import dataclass
 import datetime as dtm
 
 from common.chrono.tenor import Tenor
-from instruments.coupon_bond import FixCouponBond, FixCouponBondSnap, CashFlow, BondYieldParameters
+from instruments.coupon_bond import FixCouponBond, CashFlow, BondYieldParameters
 from instruments.bond_future import BondFutureBond
 from common import sql
 from data_api.config import META_DB
@@ -39,15 +39,20 @@ class BondFactorYieldParams(BondYieldParameters):
         return _next_coupon_ratio(from_date, to_date, self.month_step) * self.get_period_dcf()
 
 @dataclass
-class BondFutureFactor(FixCouponBondSnap):
+class BondFutureFactor(FixCouponBond):
     _month_increment: int = 1
+    
+    @classmethod
+    def create(cls, bond: FixCouponBond, factor_params: dict):
+        return cls(bond._maturity_date, bond._coupon_rate, bond._coupon_frequency,
+            _first_settle_date=bond._first_settle_date, _settle_delay=bond._settle_delay, **factor_params)
     
     def get_accrued_interest(self, settle_date: dtm.date, cashflow: CashFlow):
         return cashflow.amount * (1 - _next_coupon_ratio(settle_date, cashflow.date, self._month_increment))
     
-    def get_conversion_factor(self, yield_norm: float):
+    def get_conversion_factor(self, date: dtm.date, yield_norm: float):
         yield_params = BondFactorYieldParams(month_step=self._month_increment)
-        return self.get_price_from_yield(yield_norm, yield_params) / 100
+        return self._price_from_yield(yield_norm, self.get_settle_info(date), yield_params) / 100
 
 def load_conversion_factors(
         code: str, expiry: dtm.date, bonds: list[FixCouponBond],
@@ -60,8 +65,8 @@ def load_conversion_factors(
     for bond in bonds:
         if (not original_term or bond.original_term <= original_term
             ) and min_maturity <= bond.maturity_date <= max_maturity:
-            factor_obj = BondFutureFactor(bond, ref_date, **factor_params)
-            conversion_factor = factor_obj.get_conversion_factor(ytm_standard)
+            factor_obj = BondFutureFactor.create(bond, factor_params)
+            conversion_factor = factor_obj.get_conversion_factor(ref_date, ytm_standard)
             insert_rows.append(f"('{code}', '{bond.name}', {conversion_factor})")
     if insert_rows:
         insert_query = f"INSERT OR IGNORE INTO {BONDFUT_REF_TABLE} VALUES {','.join(insert_rows)};"
@@ -69,14 +74,13 @@ def load_conversion_factors(
     else:
         return True
 
-def get_basket_bonds(code: str, bond_universe: list[FixCouponBondSnap],
+def get_basket_bonds(code: str, bond_universe: list[FixCouponBond],
                      expiry: dtm.date = None) -> list[BondFutureBond]:
     select_query = f"""SELECT bond_id, conversion_factor FROM {BONDFUT_REF_TABLE}
     WHERE contract_code='{code}'"""
     select_rows = sql.fetch(select_query, META_DB)
     if not select_rows:
-        bonds = [bond_state._bond for bond_state in bond_universe]
-        load_conversion_factors(code, expiry, bonds)
+        load_conversion_factors(code, expiry, bond_universe)
         select_rows = sql.fetch(select_query, META_DB)
     bond_cfs = dict(select_rows)
     basket_bonds = []

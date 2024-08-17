@@ -1,5 +1,4 @@
 import datetime as dtm
-from sortedcontainers import SortedDict
 
 from data_api import nyfed, cme
 from instruments.fixing import Fixing, FixingCurve
@@ -11,10 +10,10 @@ from data_api.config import META_DB
 
 
 def read_fixings(code: str, from_date: dtm.date) -> FixingCurve:
-    res = SortedDict()
+    res = dict()
     for d, v in nyfed.get_data(code=code, from_date=from_date):
         res[d] = v / 100
-    return FixingCurve(res, name=code)
+    return FixingCurve(res)
 
 def read_IMM_futures(code: str) -> list[RateFutureCompound]:
     contracts_list = cme.get_futures_contracts(code)

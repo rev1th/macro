@@ -1,19 +1,19 @@
-
 import logging
 
-from instruments.coupon_bond import FixCouponBond, FixCouponBondSnap
+from instruments.coupon_bond import FixCouponBond
 from instruments.bond_future import BondFuture
 import data_api.reader as data_reader
 import data_api.cme as cme_api
 import data_api.treasury as tsy_api
-from config import usd_mkt
 import lib.bond_future_helper as bond_fut_lib
+from markets import usd_lib
 from models.bond_future_model import BondFutureModel
+from models.context import ConfigContext
 
 logger = logging.Logger(__name__)
 
 
-def get_contracts(code: str, value_date, bond_universe: list[FixCouponBondSnap]) -> list[BondFuture]:
+def get_contracts(code: str, value_date, bond_universe: list[FixCouponBond]) -> list[BondFuture]:
     listed_bond_futs = data_reader.read_bond_futures(code)
     futures_prices = cme_api.get_fut_settle_prices(code, value_date)
     bond_futs = []
@@ -28,15 +28,18 @@ def get_contracts(code: str, value_date, bond_universe: list[FixCouponBondSnap])
             logger.info(f"No price found for future {ins.name}. Skipping")
     return bond_futs
 
-_BOND_UNIVERSE: list[FixCouponBond] = None
+CODE = 'UST'
 def construct(value_date = None):
-    global _BOND_UNIVERSE
-    last_settle_date = usd_mkt.get_last_valuation_date()
-    if not value_date or not _BOND_UNIVERSE:
-        value_date = last_settle_date
-        _BOND_UNIVERSE = tsy_api.get_coupon_bonds(value_date)
-    settle_date = min(value_date, last_settle_date)
-    bonds_price = tsy_api.get_bonds_price(settle_date)
-    bonds_basket = [FixCouponBondSnap(bond, settle_date, bonds_price[bond.name]) for bond in _BOND_UNIVERSE]
-    contracts = [get_contracts(code, value_date, bonds_basket) for code in bond_fut_lib.FUTPROD_TENORS]
+    last_value_date = usd_lib.get_last_valuation_date()
+    if not value_date:
+        value_date = last_value_date
+    if not ConfigContext().has_coupon_bonds(CODE):
+        ConfigContext().add_coupon_bonds(CODE, tsy_api.get_coupon_bonds(value_date))
+    bond_universe = ConfigContext().get_coupon_bonds(CODE)
+    bond_value_date = min(value_date, last_value_date)
+    bonds_price = tsy_api.get_bonds_price(bond_value_date)
+    for bond in bond_universe:
+        if bond.name in bonds_price:
+            bond.set_data(bond_value_date, bonds_price[bond.name][0])
+    contracts = [get_contracts(code, value_date, bond_universe) for code in bond_fut_lib.FUTPROD_TENORS]
     return BondFutureModel(value_date, [c for cs in contracts for c in cs], 'USD-SOFR')

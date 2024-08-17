@@ -10,8 +10,8 @@ class DataContext(object):
             cls.instance = super(DataContext, cls).__new__(cls)
         return cls.instance
     
-    def add_fixing_curve(self, fixing_curve: FixingCurve) -> None:
-        self._fixings[fixing_curve.name] = fixing_curve
+    def add_fixing_curve(self, code: str, fixing_curve: FixingCurve) -> None:
+        self._fixings[code] = fixing_curve
     
     def get_fixings(self, code: str):
         return self._fixings[code]

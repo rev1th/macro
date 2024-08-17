@@ -1,4 +1,3 @@
-
 from pydantic.dataclasses import dataclass
 from typing import ClassVar, Union, Optional
 import datetime as dtm
@@ -71,48 +70,58 @@ class RateCurveModel(NameClass):
     def knot_instruments(self) -> list[CurveInstrument]:
         return [inst for inst in self._instruments if inst.knot]
     
-    def reset(self, date: dtm.date = None) -> None:
-        if date:
-            kwargs = {}
-            if self._interpolation_methods:
-                for id, interp in enumerate(self._interpolation_methods):
-                    if isinstance(interp[0], str):
-                        for inst_id, inst in enumerate(self.knot_instruments()):
-                            if inst.name == interp[0]:
-                                self._interpolation_methods[id] = (inst_id, interp[1])
-                                break
-                kwargs['interpolation_methods'] = self._interpolation_methods
-            if self._daycount_type:
-                kwargs['_daycount_type'] = self._daycount_type
-            if self._collateral_curve:
-                self.collateral_curve = CurveContext().get_rate_curve_last(self._collateral_curve, self.date)
-            if self._spread_from:
-                curve_obj = SpreadCurve
-                kwargs['_base_curve'] = CurveContext().get_rate_curve(self._spread_from, self.date)
-            elif self._collateral_spot:
-                curve_obj = FXCurve
-                kwargs['_spot'] = self._collateral_spot
-                kwargs['_domestic_curve'] = self.collateral_curve
-            else:
-                curve_obj = RateCurve
-            self._curve = curve_obj(
-                date,
-                [(k, 1) for k in self._knots],
-                _calendar = self._constructor._calendar,
-                name=f"{self._constructor.name}-{self.name}",
-                **kwargs
-            )
-            CurveContext().update_rate_curve(self._curve)
-            if self._rate_vol_curve:
-                self.set_convexity()
+    def reset(self, date: dtm.date) -> None:
+        kwargs = {}
+        if self._interpolation_methods:
+            for id, interp in enumerate(self._interpolation_methods):
+                if isinstance(interp[0], str):
+                    for inst_id, inst in enumerate(self.knot_instruments()):
+                        if inst.name == interp[0]:
+                            self._interpolation_methods[id] = (inst_id, interp[1])
+                            break
+            kwargs['interpolation_methods'] = self._interpolation_methods
+        if self._daycount_type:
+            kwargs['_daycount_type'] = self._daycount_type
+        if self._collateral_curve:
+            self.collateral_curve = CurveContext().get_rate_curve_last(self._collateral_curve, self.date)
+        if self._spread_from:
+            curve_obj = SpreadCurve
+            kwargs['_base_curve'] = CurveContext().get_rate_curve(self._spread_from, self.date)
+        elif self._collateral_spot:
+            curve_obj = FXCurve
+            kwargs['_spot'] = self._collateral_spot
+            kwargs['_domestic_curve'] = self.collateral_curve
         else:
-            self._curve = None
+            curve_obj = RateCurve
+        self._curve = curve_obj(
+            date,
+            [(k, 1) for k in self._knots],
+            _calendar = self._constructor._calendar,
+            name=f"{self._constructor.name}-{self.name}",
+            **kwargs
+        )
+        CurveContext().update_rate_curve(self._curve)
+        if self._rate_vol_curve:
+            self.set_convexity()
     
     def get_calibration_summary(self) -> pd.DataFrame:
         return pd.DataFrame(
             [(self.date, self.name, ins.name, ins.end, ins.data[self.date], ins.knot,
                 self.get_instrument_pv(ins)) for ins in self._instruments],
             columns=['Date', 'Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
+        )
+    
+    def get_nodes_summary(self):
+        knots = [self.date] + self._knots
+        fwd_rates = []
+        prev_rate = None
+        for id in range(len(knots)):
+            rate = self.curve.get_forward_rate(knots[id], knots[id] + dtm.timedelta(days=1))
+            fwd_rates.append((knots[id], rate, rate-prev_rate if prev_rate else None))
+            prev_rate = rate
+        return pd.DataFrame(
+            [(self.date, self.name, knot, rate, change) for knot, rate, change in fwd_rates],
+            columns=['Date', 'Curve', 'Node', 'Rate', 'Change']
         )
     
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
@@ -343,6 +352,9 @@ class RateCurveGroupModel(NameDateClass):
     
     def get_calibration_summary(self) -> list[pd.DataFrame]:
         return pd.concat([con.get_calibration_summary() for con in self.models])
+    
+    def get_nodes_summary(self):
+        return pd.concat([con.get_nodes_summary() for con in self.models])
     
     def get_graph_info(self) -> tuple[dict[str, int], dict[str, int]]:
         fwd_rates = {}

@@ -1,12 +1,10 @@
-
 import logging
 from pydantic.dataclasses import dataclass
 from enum import StrEnum
-from sortedcontainers import SortedDict
 import datetime as dtm
 
-from common.base_class import NameClass
 from common.models.base_instrument import BaseInstrument
+from common.models.data_series import DataSeries
 
 logger = logging.Logger(__name__)
 
@@ -17,32 +15,24 @@ class Fixing(BaseInstrument):
 
 
 class RateFixingType(StrEnum):
-
     RFR = 'RFR'
     IBOR = 'IBOR'
 
 
-# No validators for non-default classes like SortedDict, pandas.DataFrame
-# https://docs.pydantic.dev/latest/usage/model_config/#arbitrary-types-allowed
-@dataclass(config=dict(arbitrary_types_allowed = True))
-class FixingCurve(NameClass):
-    _datevalue: SortedDict[dtm.date, float]
+class FixingCurve(DataSeries):
 
     def get(self, date: dtm.date):
         try:
-            return self._datevalue[date]
+            return self[date]
         except KeyError:
-            if date > self._datevalue.peekitem(-1)[0]:
-                logger.error(f"{date} is after the last available point {self._datevalue.peekitem(-1)[0]}")
+            if date > self.get_last_point()[0]:
+                logger.error(f"{date} is after the last available point {self.get_last_point()[0]}")
                 return self._datevalue.peekitem(-1)[1]
-            elif date < self._datevalue.peekitem(0)[0]:
-                raise Exception(f"{date} is before the first available point {self._datevalue.peekitem(0)[0]}")
+            elif date < self.get_first_point()[0]:
+                raise Exception(f"{date} is before the first available point {self.get_first_point()[0]}")
             else:
-                return self._datevalue.peekitem(self._datevalue.bisect_left(date)-1)[1]
-        
-    def get_last_date(self) -> dtm.date:
-        return self._datevalue.peekitem(-1)[0]
+                return self.get_latest_value(date)
 
     def get_last_value(self) -> float:
-        return self._datevalue[self.get_last_date()]
+        return self.get_last_point()[1]
 

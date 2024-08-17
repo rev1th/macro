@@ -1,4 +1,3 @@
-
 from common.chrono import Tenor, BDayAdjust, BDayAdjustType
 from common.chrono.calendar import Calendar
 from volatility.models.fx_vol_surface_builder import FXVolQuote, FXVolSurfaceModel

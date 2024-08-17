@@ -1,4 +1,3 @@
-
 import datetime as dtm
 
 from common import request_web as request
@@ -14,10 +13,10 @@ NYFED_URL_CODEMAP = {
 NYFED_DATE_FORMAT = '%m/%d/%Y'
 NYFED_TABLE = 'rates_fixings'
 
-def update_data(code: str):
+def update_fixing(code: str):
     if code not in NYFED_URL_CODEMAP:
         raise Exception(f'{code} not found in URL mapping')
-    last_date = get_last_data_date(code) + dtm.timedelta(days=1)
+    last_date = get_last_fixing_date(code) + dtm.timedelta(days=1)
     params = {
         'startDt': last_date.strftime(NYFED_URL_DATE_FORMAT),
         'eventCodes': NYFED_URL_CODEMAP[code],
@@ -32,14 +31,14 @@ def update_data(code: str):
         cells = row.split(',')
         date_str, rate_type, rate = [cells[id] for id in [0, 1, 2]]
         date_sql = dtm.datetime.strptime(date_str, NYFED_DATE_FORMAT).date().strftime(sql.DATE_FORMAT)
-        insert_rows.append(f"('USD', '{rate_type}', '{date_sql}', '{rate}')")
+        insert_rows.append(f"('USD', '{rate_type}', '{date_sql}', {rate})")
     if insert_rows:
         insert_query = (f"INSERT INTO {NYFED_TABLE} VALUES {','.join(insert_rows)};")
         return sql.modify(insert_query, PRICES_DB)
     else:
         return True
 
-def get_last_data_date(code: str) -> dtm.date:
+def get_last_fixing_date(code: str) -> dtm.date:
     select_query = f"SELECT date FROM {NYFED_TABLE} WHERE type = '{code}' ORDER BY date DESC"
     data_date = sql.fetch(select_query, PRICES_DB, count=1)
     return dtm.datetime.strptime(data_date[0], sql.DATE_FORMAT).date()
@@ -50,12 +49,17 @@ def get_data(code: str, from_date: dtm.date):
     res_fmt = [(dtm.datetime.strptime(row[0], sql.DATE_FORMAT).date(), row[1]) for row in select_res]
     return res_fmt
 
-def main():
-    for fix in NYFED_URL_CODEMAP:
-        update_data(fix)
+def update():
+    for code in NYFED_URL_CODEMAP:
+        if not update_fixing(code):
+            return False
+    return True
+
+def get(from_date: dtm.date):
+    return {code: get_data(code, from_date) for code in NYFED_URL_CODEMAP}
 
 if __name__ == '__main__':
-    main()
+    update()
 
 # create_query = """CREATE TABLE rates_fixings (
 #     currency TEXT, type TEXT, date TEXT, rate REAL,

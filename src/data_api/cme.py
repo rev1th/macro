@@ -1,4 +1,3 @@
-
 import datetime as dtm
 import pandas as pd
 import logging
@@ -203,8 +202,7 @@ def load_future_settle_prices(code: str, settle_date: dtm.date):
     if insert_rows:
         insert_query = f"INSERT INTO {FUTURES_PRICE_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, PRICES_DB)
-    else:
-        return True
+    return False
 
 MIN_MAX_OI = 0.01
 def get_fut_settle_prices(code: str, settle_date: dtm.date):
@@ -216,9 +214,10 @@ def get_fut_settle_prices(code: str, settle_date: dtm.date):
         if settle_date > fut_data_dates[0]:
             return load_future_quotes(code)[1]
         elif settle_date in fut_data_dates:
-            load_future_settle_prices(code, settle_date)
+            if not load_future_settle_prices(code, settle_date):
+                raise Exception(f"Futures prices not loaded for {code} on {settle_date}")
         else:
-            raise Exception(f"No futures settlement prices found for date {settle_date}")
+            raise Exception(f"Futures prices not available for {code} on {settle_date}")
         prices_list = sql.fetch(price_query, PRICES_DB)
     res: dict[str, float] = {}
     max_oi = 0
@@ -272,15 +271,15 @@ def load_swap_data():
     if insert_rows:
         insert_query = f"INSERT OR IGNORE INTO {SWAP_RATES_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, PRICES_DB)
-    else:
-        return True
+    return False
 
 def get_swap_data(code: str, date: dtm.date) -> dict[str, float]:
     rates_query = f"""SELECT term, rate FROM {SWAP_RATES_TABLE} 
     WHERE code='{code}' AND date='{date.strftime(sql.DATE_FORMAT)}'"""
     rates_list = sql.fetch(rates_query, PRICES_DB)
     if not rates_list:
-        load_swap_data()
+        if not load_swap_data():
+            raise Exception(f"Swap data not loaded for {code}")
         rates_list = sql.fetch(rates_query, PRICES_DB)
     return dict(rates_list)
 
@@ -289,7 +288,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CME data scraper')
     parser.add_argument('--futures', default='SR1')
     args = parser.parse_args()
-    print(args)
+    logger.error(args)
     for fut in args.futures.split(','):
         update_futures_list(fut)
 
