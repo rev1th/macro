@@ -1,6 +1,6 @@
 import logging
 
-from markets import usd_lib, usd_rc, usd_bonds, usd_bond_futs
+from markets import usd_lib, usd_bonds_vol, usd_rates_vol, usd_rc, usd_bonds, usd_bond_futs
 from markets import cny_rc, cny_fxvol
 from lib import plotter
 from models.rate_curve_builder import RateCurveGroupModel
@@ -45,9 +45,14 @@ def evaluate_bond_futures(start_date = None, end_date = None):
         res.append(usd_bond_futs.construct(date))
     return res
 
-def evaluate_vol_curves():
+def evaluate_vol_surfaces():
     fxvol = cny_fxvol.construct()
     return [fxvol]
+
+def evaluate_option_surfaces():
+    rf_vol = usd_rates_vol.construct()
+    bfs_vol = usd_bonds_vol.construct()
+    return [rf_vol] + bfs_vol
 
 
 if __name__ == '__main__':
@@ -56,3 +61,5 @@ if __name__ == '__main__':
             plotter.display_rates_curve(*ycg.get_graph_info())
     for bcm in evaluate_bonds_curves():
         plotter.display_bonds_curve(*bcm.get_graph_info())
+    for bfm in evaluate_bond_futures():
+        bfm.get_summary()

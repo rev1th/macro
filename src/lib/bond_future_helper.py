@@ -63,11 +63,12 @@ def load_conversion_factors(
     max_maturity = get_tenor(max_term).get_date(ref_date) if max_term else dtm.date.max
     insert_rows = []
     for bond in bonds:
-        if (not original_term or bond.original_term <= original_term
-            ) and min_maturity <= bond.maturity_date <= max_maturity:
+        if bond._first_settle_date <= expiry and \
+            (not original_term or bond.original_term <= original_term) and \
+            min_maturity <= bond.maturity_date <= max_maturity:
             factor_obj = BondFutureFactor.create(bond, factor_params)
             conversion_factor = factor_obj.get_conversion_factor(ref_date, ytm_standard)
-            insert_rows.append(f"('{code}', '{bond.name}', {conversion_factor})")
+            insert_rows.append(f"\n('{code}', '{bond.name}', {conversion_factor})")
     if insert_rows:
         insert_query = f"INSERT OR IGNORE INTO {BONDFUT_REF_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, META_DB)

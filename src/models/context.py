@@ -1,5 +1,6 @@
 import datetime as dtm
 from instruments.bond import ZeroCouponBond
+from instruments.bond_future import BondFuture
 from instruments.coupon_bond import FixCouponBond
 from instruments.rate_future import RateFutureC
 from instruments.swap_convention import SwapConvention
@@ -11,6 +12,7 @@ class ConfigContext(object):
     _rate_futures: dict[str, list[RateFutureC]] = {}
     _zero_bonds: dict[str, list[ZeroCouponBond]] = {}
     _coupon_bonds: dict[str, list[FixCouponBond]] = {}
+    _bond_futures: dict[str, list[BondFuture]] = {}
     
     def __new__(cls):
         if not hasattr(cls, 'instance'):
@@ -52,3 +54,12 @@ class ConfigContext(object):
     
     def get_bonds(self, name: str):
         return self._zero_bonds[name] + self._coupon_bonds[name]
+    
+    def add_bond_futures(self, code: str, futures: list[BondFuture]) -> None:
+        self._bond_futures[code] = futures
+    
+    def has_bond_futures(self, code: str) -> bool:
+        return code in self._bond_futures
+    
+    def get_bond_futures(self, code: str):
+        return self._bond_futures[code]

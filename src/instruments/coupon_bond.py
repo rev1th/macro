@@ -41,7 +41,7 @@ class FixCouponBond(Bond):
         coupon_dates = self._coupon_frequency.generate_schedule(
             self._first_settle_date, self._maturity_date,
             roll_convention=RollConvention(RollConventionType.EndOfMonth),
-            bd_adjust=BDayAdjust(BDayAdjustType.ModifiedFollowing, self.calendar), extended=True)
+            bd_adjust=BDayAdjust(BDayAdjustType.Following, self.calendar), extended=True)
         c_dcf = self.get_coupon_dcf()
         self.cashflows = []
         for cd_id in range(1, len(coupon_dates)):
@@ -62,6 +62,7 @@ class FixCouponBond(Bond):
         if settle_date >= self._maturity_date:
             return CouponBondSettleInfo(settle_date, -1, 0)
         coupon_index = bisect.bisect_right(self.cashflows, settle_date, key=lambda cshf: cshf.date)
+        assert coupon_index < len(self.cashflows)-1, f'{self.name} settle {settle_date} after last coupon'
         acrrued_interest = self.get_accrued_interest(settle_date, self.cashflows[coupon_index])
         return CouponBondSettleInfo(settle_date, coupon_index, acrrued_interest)
     

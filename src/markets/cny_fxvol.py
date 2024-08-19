@@ -1,6 +1,6 @@
 from common.chrono import Tenor, BDayAdjust, BDayAdjustType
 from common.chrono.calendar import Calendar
-from volatility.models.fx_vol_surface_builder import FXVolQuote, FXVolSurfaceModel
+from volatility.models.fx_vol_surface_model import FXVolQuote, FXVolSurfaceModel
 from volatility.models.vol_types import VolatilityQuoteType
 
 import data_api.cfets as cfets_api

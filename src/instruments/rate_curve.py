@@ -21,10 +21,7 @@ logger = logging.Logger(__name__)
 # https://stackoverflow.com/questions/53990296/how-do-i-make-a-python-dataclass-inherit-hash
 @dataclass(frozen=True)
 class RateCurveNode(DataPoint):
-
-    @property
-    def discountfactor(self):
-        return self.value
+    pass
 
 # __init__ cannot be overriden so we declare InitVar and assign __post_init__
 # https://docs.python.org/3/library/dataclasses.html#init-only-variables

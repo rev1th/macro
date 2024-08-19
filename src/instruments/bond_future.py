@@ -35,7 +35,6 @@ class BondFuture(Future):
     _basket_bonds: list[BondFutureBond] = field(kw_only=True, default_factory=list)
 
     _underlying: Optional[str] = field(init=False, default=None)
-    _settle: Optional[dtm.date] = field(init=False, default=None)
     
     def get_basket_metrics(self, date: dtm.date, curve: RateCurve) -> list[BondFutureBond]:
         for bfb in self._basket_bonds:

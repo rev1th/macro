@@ -17,10 +17,15 @@ from models.data_context import DataContext
 
 @dataclass
 class RateFuture(Future):
+    _settle: dtm.date
     _rate_start_date: dtm.date
     _rate_end_date: dtm.date = None
 
     _convexity: ClassVar[float]
+    
+    @property
+    def settle_date(self):
+        return self._settle
     
     def get_settle_rate(self, date: dtm.date, curve: RateCurve) -> float:
         "Get settlement rate for RateFuture"

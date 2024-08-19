@@ -129,7 +129,7 @@ class BondCurveModelNP(BondCurveModel):
             n_id = 0
             for cshf in bond.get_cashflows(self.date):
                 cshf_pv = cshf.amount * curve.get_df(cshf.date)
-                while cshf.date > nodes[n_id+1].date:
+                while n_id < len(nodes)-2 and cshf.date > nodes[n_id+1].date:
                     n_id += 1
                 date_ratio = (cshf.date - nodes[n_id].date) / (nodes[n_id+1].date - nodes[n_id].date)
                 price_prime[n_id] += cshf_pv * date_ratio

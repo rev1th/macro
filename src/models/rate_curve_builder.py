@@ -265,7 +265,7 @@ class RateCurveGroupModel(NameDateClass):
             error = 0
             for j, nd in enumerate(crv_mod.curve.nodes):
                 assert nodes_in[i][j].date == nd.date, f"Unexpected nodes mismatch {nodes_in[i][j]} {nd}"
-                error += abs(nodes_in[i][j].discountfactor - nd.discountfactor)
+                error += abs(nodes_in[i][j].value - nd.value)
             if error > CURVE_SOLVER_TOLERANCE:
                 if iter >= CURVE_SOLVER_MAX_ITERATIONS:
                     logger.error(f"Failed to fit the curve after {CURVE_SOLVER_MAX_ITERATIONS}.\n {nodes_in}")

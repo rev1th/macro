@@ -24,7 +24,7 @@ def get_futures_for_curve(value_date: dtm.date, fixing_code: str) -> list[RateFu
     instruments_crv = []
     for code in codes:
         instruments = CONFIG_CONTEXT.get_futures(code)
-        settle_data = cme_api.get_fut_settle_prices(code, value_date)
+        settle_data = cme_api.get_future_settle_prices(code, value_date)
         instruments_active = [ins for ins in instruments if ins.expiry > value_date]
         for ins in instruments_active:
             price = settle_data.get(ins.name)

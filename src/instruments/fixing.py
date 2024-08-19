@@ -27,7 +27,7 @@ class FixingCurve(DataSeries):
         except KeyError:
             if date > self.get_last_point()[0]:
                 logger.error(f"{date} is after the last available point {self.get_last_point()[0]}")
-                return self._datevalue.peekitem(-1)[1]
+                return self.peekitem(-1)[1]
             elif date < self.get_first_point()[0]:
                 raise Exception(f"{date} is before the first available point {self.get_first_point()[0]}")
             else:

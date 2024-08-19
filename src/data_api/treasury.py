@@ -31,7 +31,7 @@ def load_bonds_price(date: dtm.date) -> pd.DataFrame:
     insert_rows = []
     date_str = date.strftime(sql.DATE_FORMAT)
     for _, row in res_df.iterrows():
-        insert_rows.append(f"('{row[CUSIP_COL]}', '{date_str}', {row[CLOSE_COL]}, {row[BUY_COL]}, {row[SELL_COL]})")
+        insert_rows.append(f"\n('{row[CUSIP_COL]}', '{date_str}', {row[CLOSE_COL]}, {row[BUY_COL]}, {row[SELL_COL]})")
     if insert_rows:
         insert_query = (f"INSERT INTO {BONDS_PRICE_TABLE} VALUES {','.join(insert_rows)};")
         return sql.modify(insert_query, PRICES_DB)
@@ -53,6 +53,7 @@ def get_bonds_price(date: dtm.date) -> dict[str, float]:
     for row in prices_list:
         res[row[0]] = row[1], None if row[2] == 0 else row[2]-row[3]
     return res
+
 
 BONDS_REF_TABLE = 'bond_reference'
 BONDS_DETAILS_URL = 'https://www.treasurydirect.gov/TA_WS/securities/search'
@@ -89,23 +90,6 @@ def load_bonds_details(start: dtm.date):
         return sql.modify(insert_query, META_DB)
     else:
         return True
-
-def get_bonds(date: dtm.date) -> list:
-    select_query = f"""SELECT type, id, maturity, coupon, original_issue_date FROM {BONDS_REF_TABLE}
-    WHERE maturity > '{date.strftime(sql.DATE_FORMAT)}'"""
-    select_res = sql.fetch(select_query, META_DB)
-    settle_delay = Tenor.bday(1)
-    bonds_list = []
-    for row in select_res:
-        bond_type, bond_id = row[:2]
-        maturity_date = dtm.datetime.strptime(row[2], sql.DATE_FORMAT)
-        if bond_type in ('Note', 'Bond'):
-            issue_date = dtm.datetime.strptime(row[4], sql.DATE_FORMAT)
-            bonds_list.append(FixCouponBond(maturity_date, row[3], Frequency.SemiAnnual, issue_date,
-                                            _settle_delay=settle_delay, name=bond_id))
-        elif bond_type in ('Bill'):
-            bonds_list.append(ZeroCouponBond(maturity_date, _settle_delay=settle_delay, name=bond_id))
-    return bonds_list
 
 def get_zero_bonds(date: dtm.date) -> list[ZeroCouponBond]:
     select_query = f"""SELECT id, maturity FROM {BONDS_REF_TABLE}
