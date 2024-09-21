@@ -1,6 +1,6 @@
 
 from pydantic.dataclasses import dataclass
-from dataclasses import InitVar, KW_ONLY
+from dataclasses import InitVar, field
 from typing import ClassVar, Union, Optional
 import datetime as dtm
 import bisect
@@ -28,11 +28,10 @@ class RateCurveNode(DataPoint):
 @dataclass
 class RateCurve(NameDateClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
-    _: KW_ONLY
-    interpolation_methods: InitVar[list[tuple[Optional[Union[dtm.date, int]], str]]] = [(None, 'Default')]
+    interpolation_methods: InitVar[list[tuple[dtm.date | int | None, str]]] = field(kw_only=True, default=None)
 
-    _daycount_type: DayCount = DayCount.ACT360
-    _calendar: Optional[Calendar] = None
+    _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT360)
+    _calendar: Optional[Calendar] = field(kw_only=True, default=None)
 
     _nodes: ClassVar[list[RateCurveNode]]
     _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]
@@ -46,6 +45,8 @@ class RateCurve(NameDateClass):
         self._nodes = [RateCurveNode(nd[0], nd[1]) for nd in nodes_init]
         self._interpolation_dates = [self.date]
         self._interpolator_classes = []
+        if not interpolation_methods:
+            interpolation_methods = [(None, 'Default')]
         for cto, im in interpolation_methods:
             self._interpolation_dates.append(self._get_cutoff_date(cto))
             args = []

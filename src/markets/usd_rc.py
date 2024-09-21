@@ -25,6 +25,7 @@ def get_futures_for_curve(value_date: dtm.date, fixing_code: str) -> list[RateFu
     for code in codes:
         instruments = CONFIG_CONTEXT.get_futures(code)
         settle_data = cme_api.get_future_settle_prices(code, value_date)
+        # Skip futures on expiry date, we only use fixing rates till T
         instruments_active = [ins for ins in instruments if ins.expiry > value_date]
         for ins in instruments_active:
             price = settle_data.get(ins.name)
@@ -94,56 +95,53 @@ def construct(val_dt: dtm.date = None):
         val_dt = last_val_date
     live = val_dt > last_val_date
     
-    next_btenor = Tenor.bday(1, usd_lib.CALENDAR)
-    meeting_dates_eff = [dt for dt in CONFIG_CONTEXT.get_meeting_nodes('FED') if dt >= val_dt]
+    meeting_dates_eff = [dt for dt in CONFIG_CONTEXT.get_meeting_nodes('FED') if dt > val_dt]
 
     # SOFR - OIS
     fixing_name = 'SOFR'
-    deposit = Deposit(next_btenor.get_date(val_dt), name=fixing_name)  # meeting_dates_eff[0])
-    deposit.data[val_dt] = DataContext().get_fixings(fixing_name).get_last_value()
-
     futs_crv = get_futures_for_curve(val_dt, fixing_code=fixing_name)
     fut_cutoff = '5y' if live else '30m'
     fut_cutoff_date = Tenor(fut_cutoff).get_date(val_dt)
-    # Skip futures on expiry date, we only use fixing rates till T
     for fi in futs_crv:
-        if deposit.end > fi.expiry or fi.expiry > fut_cutoff_date:
+        if fi.expiry > fut_cutoff_date:
             fi.exclude_knot = True
     mdt_sc = set_step_knots(futs_crv, meeting_dates_eff)
+    curve_instruments = futs_crv
+    if futs_crv[0].knot > meeting_dates_eff[0]:
+        deposit = Deposit(meeting_dates_eff[0], name=fixing_name)
+        deposit.data[val_dt] = DataContext().get_fixings(fixing_name).get_latest_value(val_dt)
+        curve_instruments = [deposit] + futs_crv
 
     usd_rate_vol = 1.4/100
     rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name=f'{fixing_name}-Vol')
-    if live:
-        curve_instruments = [deposit] + futs_crv
-    else:
+    if not live:
         swaps = get_swaps_curve(val_dt, 'USD_SOFR', cutoff=fut_cutoff_date)
-        curve_instruments = [deposit] + futs_crv + swaps
+        curve_instruments.extend(swaps)
     curve_defs = [RateCurveModel(curve_instruments,
                     _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
                     _rate_vol_curve=rate_vol_curve, name=fixing_name)]
 
     # Fed fund
     fixing_name = 'EFFR'
-    ff_deposit = Deposit(next_btenor.get_date(val_dt), name=fixing_name)
-    ff_deposit.data[val_dt] = DataContext().get_fixings(fixing_name).get_last_value()
-
     ff_futs_crv = get_futures_for_curve(val_dt, fixing_code=fixing_name)
     ff_fut_cutoff = Tenor('13m').get_date(val_dt)
     for fi in ff_futs_crv:
-        if ff_deposit.end > fi.expiry or fi.expiry > ff_fut_cutoff:
+        if fi.expiry > ff_fut_cutoff:
             fi.exclude_knot = True
     ff_mdt_sc = set_step_knots(ff_futs_crv, meeting_dates_eff)
+    ff_curve_instruments = ff_futs_crv
+    if ff_futs_crv[0].knot > meeting_dates_eff[0]:
+        ff_deposit = Deposit(meeting_dates_eff[0], name=fixing_name)
+        ff_deposit.data[val_dt] = DataContext().get_fixings(fixing_name).get_latest_value(val_dt)
+        ff_curve_instruments = [ff_deposit] + ff_futs_crv
     
     ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name=f'{fixing_name}-Vol')
-    if live:
-        ff_curve_instruments = [ff_deposit] + ff_futs_crv
-        interps = [(None, 'LogLinear')]
-    else:
+    if not live:
         ff_swaps = get_swaps_curve(val_dt, code='USD_FF_SOFR', cutoff=ff_fut_cutoff)
-        ff_curve_instruments = [ff_deposit] + ff_futs_crv + ff_swaps
-        interps = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')]
+        ff_curve_instruments.extend(ff_swaps)
     ff_curve_defs = [RateCurveModel(ff_curve_instruments,
-                    _interpolation_methods=interps, _rate_vol_curve=ff_rate_vol_curve,
+                    _interpolation_methods=[(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')],
+                    _rate_vol_curve=ff_rate_vol_curve,
                     _collateral_curve='USD-SOFR', _spread_from='USD-SOFR', name=fixing_name)]
     
     return [

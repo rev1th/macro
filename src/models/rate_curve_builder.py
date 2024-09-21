@@ -60,10 +60,6 @@ class RateCurveModel(NameClass):
         return self._curve
     
     @property
-    def knots(self) -> list[dtm.date]:
-        return self._knots
-    
-    @property
     def date(self) -> dtm.date:
         return self._constructor.date
     
@@ -251,14 +247,14 @@ class RateCurveGroupModel(NameDateClass):
     def get_bootstrap_knots(self) -> list[dtm.date]:
         knot_dates = set()
         for crv_mod in self.models:
-            knot_dates = knot_dates.union(crv_mod.knots)
+            knot_dates = knot_dates.union(crv_mod._knots)
         return sorted(list(knot_dates))
     
     def build_bootstrap(self, iter: int = 1) -> bool:
         nodes_in = [deepcopy(crv_mod.curve.nodes) for crv_mod in self.models]
         for k in self.get_bootstrap_knots():
             for crv_mod in self.models:
-                if k not in crv_mod.knots:
+                if k not in crv_mod._knots:
                     continue
                 crv_mod.solve_knot(k)
         for i, crv_mod in enumerate(self.models):
@@ -276,7 +272,7 @@ class RateCurveGroupModel(NameDateClass):
     def set_nodes(self, log_values: list[float]):
         knot_lens_sum = [0]
         for crv_mod in self.models:
-            knot_lens_sum.append(knot_lens_sum[-1] + len(crv_mod.knots))
+            knot_lens_sum.append(knot_lens_sum[-1] + len(crv_mod._knots))
             crv_mod.curve.update_nodes(log_values[knot_lens_sum[-2] : knot_lens_sum[-1]])
         return
     
@@ -301,7 +297,7 @@ class RateCurveGroupModel(NameDateClass):
                 pvs[ki] = crv_mod.get_instrument_pv(inst)
                 ki += 1
             
-            for knot in crv_mod.knots:
+            for knot in crv_mod._knots:
                 df = crv_mod.curve.get_df(knot)
                 df_up = df * np.exp(EPSILON)
                 crv_mod.curve.update_node(knot, df_up)
@@ -325,7 +321,7 @@ class RateCurveGroupModel(NameDateClass):
         return gradient
     
     def build_solver(self) -> bool:
-        knot_count = sum([len(crv_mod.knots) for crv_mod in self.models])
+        knot_count = sum([len(crv_mod._knots) for crv_mod in self.models])
         init_guess = np.zeros(knot_count, dtype=float)
         res = solver.find_fit(cost_f=self.get_solver_error,
                               init_guess=init_guess,

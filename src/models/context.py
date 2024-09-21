@@ -31,11 +31,11 @@ class ConfigContext(object):
     def get_swap_convention(self, name: str):
         return self._swap_conventions[name]
     
-    def add_futures(self, code: str, futures: list[RateFutureC]) -> None:
-        self._rate_futures[code] = futures
+    def add_futures(self, name: str, futures: list[RateFutureC]) -> None:
+        self._rate_futures[name] = futures
     
-    def get_futures(self, code: str):
-        return self._rate_futures[code]
+    def get_futures(self, name: str):
+        return self._rate_futures[name]
     
     def add_zero_bonds(self, name: str, bonds: list[ZeroCouponBond]) -> None:
         self._zero_bonds[name] = bonds
@@ -55,11 +55,11 @@ class ConfigContext(object):
     def get_bonds(self, name: str):
         return self._zero_bonds[name] + self._coupon_bonds[name]
     
-    def add_bond_futures(self, code: str, futures: list[BondFuture]) -> None:
-        self._bond_futures[code] = futures
+    def add_bond_futures(self, name: str, futures: list[BondFuture]) -> None:
+        self._bond_futures[name] = futures
     
-    def has_bond_futures(self, code: str) -> bool:
-        return code in self._bond_futures
+    def has_bond_futures(self, name: str) -> bool:
+        return name in self._bond_futures
     
-    def get_bond_futures(self, code: str):
-        return self._bond_futures[code]
+    def get_bond_futures(self, name: str):
+        return self._bond_futures[name]
