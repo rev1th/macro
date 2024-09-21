@@ -1,6 +1,6 @@
 from common.chrono import Tenor, BDayAdjust, BDayAdjustType
 from common.chrono.calendar import Calendar
-from volatility.models.fx_vol_surface_model import FXVolQuote, FXVolSurfaceModel
+from volatility.models.fx_vol_surface_construct import FXVolQuote, FXVolSurfaceConstruct
 from volatility.models.vol_types import VolatilityQuoteType
 
 import data_api.cfets as cfets_api
@@ -13,10 +13,10 @@ def get_fx_vols() -> dict[str, list[FXVolQuote]]:
     vol_quotes = {}
     for t, quotes in fxvol_data.items():
         vol_quotes[t] = []
-        for q_info, q_value in quotes.items():
+        for q_info, (q_value, q_spread) in quotes.items():
             q_value /= 100
             if q_info == 'ATM':
-                vol_quotes[t].append(FXVolQuote(VolatilityQuoteType.ATM, q_value))
+                vol_quotes[t].append(FXVolQuote(VolatilityQuoteType.ATM, q_value, weight=1/max(q_spread, 1e-2)))
             else:
                 delta, q_type = q_info.split(' ')
                 d_value = int(delta[:-1]) / 100
@@ -36,4 +36,4 @@ def construct():
         settle_date = settle_tenor.get_date(expiry_date)
         fx_rate = fx_curve.get_fx_rate(settle_date)
         vol_data[(expiry_date, fx_rate)] = quotes
-    return FXVolSurfaceModel(value_date, vol_data, name='CNYUSD-Vol')
+    return FXVolSurfaceConstruct(value_date, vol_data, name='CNYUSD-Vol')

@@ -3,7 +3,7 @@ import logging
 import argparse
 
 from common import request_web as request
-from common.models.data import DataPointType
+from common.models.data import DataPointType, OptionDataFlag
 from common import sql
 from data_api.config import META_DB, PRICES_DB
 
@@ -325,7 +325,7 @@ def get_option_settle_prices(series: str, contract_codes: list[str], date: dtm.d
     url_params = {'tradeDate': date.strftime(DATE_FORMAT)}
     price_params = OPT_PROD_TICKS.get(series, None)
     # insert_rows = []
-    res: dict[str, dict[float, dict[str, float]]] = {}
+    res: dict[str, dict[float, dict[str, tuple[float, float]]]] = {}
     max_oi = 0
     for contract_code in contract_codes:
         contract_res = {}
@@ -348,9 +348,9 @@ def get_option_settle_prices(series: str, contract_codes: list[str], date: dtm.d
                 if strike not in contract_res:
                     contract_res[strike] = {}
                 if opt_t == 'Call':
-                    contract_res[strike]['c'] = settle_price
+                    contract_res[strike][OptionDataFlag.CALL] = (settle_price, volume)
                 elif opt_t == 'Put':
-                    contract_res[strike]['p'] = settle_price
+                    contract_res[strike][OptionDataFlag.PUT] = (settle_price, volume)
         res[contract_code] = contract_res
     #             insert_rows.append("\n("\
     # f"('{contract_code}', {strike}, '{opt_t}', '{date.strftime(sql.DATE_FORMAT)}', {settle_price}, {volume}, {oi})")

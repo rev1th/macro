@@ -93,5 +93,6 @@ def load_fxvol() -> tuple[dtm.date, dict[str, dict[str, float]]]:
             tenor = rec['tenor']
             if tenor not in res:
                 res[tenor] = {}
-            res[tenor][vtype] = float(rec['midVolatilityStr'])
+            spread = float(rec['askVolatilityStr']) - float(rec['bidVolatilityStr'])
+            res[tenor][vtype] = float(rec['midVolatilityStr']), spread
     return data_date, res

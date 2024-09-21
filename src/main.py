@@ -49,10 +49,10 @@ def evaluate_vol_surfaces():
     fxvol = cny_fxvol.construct()
     return [fxvol]
 
-def evaluate_option_surfaces():
-    rf_vol = usd_rates_vol.construct()
-    bfs_vol = usd_bonds_vol.construct()
-    return [rf_vol] + bfs_vol
+def evaluate_option_surfaces(trade_date = None):
+    rfs_vol = usd_rates_vol.construct(trade_date)
+    bfs_vol = usd_bonds_vol.construct(trade_date)
+    return rfs_vol + bfs_vol
 
 
 if __name__ == '__main__':
