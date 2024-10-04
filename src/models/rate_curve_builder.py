@@ -11,9 +11,7 @@ from common.chrono.tenor import get_bdate_series, Calendar
 from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve_instrument import CurveInstrument
-from instruments.rate_future import RateFutureC
-from instruments.swap import DomesticSwap, BasisSwap, SwapBaseC
-from instruments.fx import FXSpot, FXSwapC, FXCurve
+from instruments.fx import FXSpot, FXCurve
 from instruments.rate_curve import RateCurve, SpreadCurve
 from instruments.vol_curve import VolCurve
 from models.curve_context import CurveContext
@@ -22,7 +20,6 @@ CURVE_SOLVER_MAX_ITERATIONS = 10
 CURVE_SOLVER_TOLERANCE = 1e-6
 DF_UPPER_LIMIT = 1e1
 DF_LOWER_LIMIT = 1e-4
-CVXADJ_RATE_TOLERANCE = 0.2e-4
 EPSILON = 1e-4
 
 logger = logging.Logger(__name__)
@@ -34,7 +31,7 @@ class RateCurveModel(NameClass):
     _instruments: list[CurveInstrument]
     _interpolation_methods: list[tuple[Optional[Union[dtm.date, int, str]], str]] = None
     _daycount_type: DayCount = None
-    _collateral_curve: Optional[str] = None
+    _collateral_curve_id: Optional[str] = None
     _collateral_spot: Optional[FXSpot] = None
     _rate_vol_curve: Optional[VolCurve] = None
     _spread_from: Optional[str] = None
@@ -43,15 +40,13 @@ class RateCurveModel(NameClass):
     _constructor: ClassVar[NameDateClass]
     _knots: ClassVar[list[dtm.date]]
     _knots_instruments: ClassVar[dict[dtm.date, list[CurveInstrument]]]
+    _collateral_curve: ClassVar[RateCurve] = None
 
     def __post_init__(self):
         knots_instruments = {}
         for ins in self._instruments:
-            ins_knot = ins.knot
-            if ins_knot:
-                if ins_knot not in knots_instruments:
-                    knots_instruments[ins_knot] = []
-                knots_instruments[ins_knot].append(ins)
+            if not ins.exclude_fit:
+                knots_instruments.setdefault(ins.knot, []).append(ins)
         self._knots = sorted(knots_instruments.keys())
         self._knots_instruments = knots_instruments
     
@@ -64,7 +59,7 @@ class RateCurveModel(NameClass):
         return self._constructor.date
     
     def knot_instruments(self) -> list[CurveInstrument]:
-        return [inst for inst in self._instruments if inst.knot]
+        return [inst for inst in self._instruments if not inst.exclude_fit]
     
     def reset(self, date: dtm.date) -> None:
         kwargs = {}
@@ -78,15 +73,15 @@ class RateCurveModel(NameClass):
             kwargs['interpolation_methods'] = self._interpolation_methods
         if self._daycount_type:
             kwargs['_daycount_type'] = self._daycount_type
-        if self._collateral_curve:
-            self.collateral_curve = CurveContext().get_rate_curve_last(self._collateral_curve, self.date)
+        if self._collateral_curve_id:
+            self._collateral_curve = CurveContext().get_rate_curve_last(self._collateral_curve_id, self.date)
         if self._spread_from:
             curve_obj = SpreadCurve
             kwargs['_base_curve'] = CurveContext().get_rate_curve(self._spread_from, self.date)
         elif self._collateral_spot:
             curve_obj = FXCurve
             kwargs['_spot'] = self._collateral_spot
-            kwargs['_domestic_curve'] = self.collateral_curve
+            kwargs['_domestic_curve'] = self._collateral_curve
         else:
             curve_obj = RateCurve
         self._curve = curve_obj(
@@ -100,9 +95,9 @@ class RateCurveModel(NameClass):
         if self._rate_vol_curve:
             self.set_convexity()
     
-    def get_calibration_summary(self) -> pd.DataFrame:
+    def get_calibration_summary(self):
         return pd.DataFrame(
-            [(self.date, self.name, ins.name, ins.end, ins.data[self.date], ins.knot,
+            [(self.date, self.name, ins.name, ins.end, ins.underlier.data[self.date], ins.knot,
                 self.get_instrument_pv(ins)) for ins in self._instruments],
             columns=['Date', 'Curve', 'Instrument', 'End Date', 'Price', 'Node', 'Error']
         )
@@ -112,7 +107,7 @@ class RateCurveModel(NameClass):
         fwd_rates = []
         prev_rate = None
         for id in range(len(knots)):
-            rate = self.curve.get_forward_rate(knots[id], knots[id] + dtm.timedelta(days=1))
+            rate = self._curve.get_forward_rate(knots[id], knots[id] + dtm.timedelta(days=1))
             fwd_rates.append((knots[id], rate, rate-prev_rate if prev_rate else None))
             prev_rate = rate
         return pd.DataFrame(
@@ -121,26 +116,16 @@ class RateCurveModel(NameClass):
         )
     
     def get_instrument_pv(self, instrument: CurveInstrument) -> float:
-        if isinstance(instrument, FXSwapC):
-            return instrument.get_pv(self.curve, ref_discount_curve=self.collateral_curve, spot=self._collateral_spot)
-        elif self._collateral_curve:
-            if isinstance(instrument, DomesticSwap):
-                return instrument.get_pv(forward_curve=self.curve, discount_curve=self.collateral_curve)
-            elif isinstance(instrument, BasisSwap):
-                return instrument.get_pv(leg1_forward_curve=self.curve, leg2_forward_curve=self.collateral_curve)
-            else:
-                return instrument.get_pv(self.curve)
-        else:
-            return instrument.get_pv(self.curve)
+        return instrument.get_pv(self.curve, self._collateral_curve, self._collateral_spot)
     
     def get_bootstrap_knot_error(self, value: float, date: dtm.date) -> float:
-        self.curve.update_node(date, value)
+        self._curve.update_node(date, value)
         knot_ins = self._knots_instruments[date]
         assert len(knot_ins) > 0, logger.critical(f'No instruments to solve knot {date}')
         return self.get_instrument_pv(knot_ins[-1])
     
     def get_solver_knot_error(self, values: list[float], date: dtm.date) -> float:
-        self.curve.update_node(date, np.exp(values[0]))
+        self._curve.update_node(date, np.exp(values[0]))
         knot_insts = self._knots_instruments[date]
         errors = np.zeros(len(knot_insts))
         for ki, ins in enumerate(knot_insts):
@@ -150,19 +135,19 @@ class RateCurveModel(NameClass):
     def get_jacobian_knot(self, values: list[float], date: dtm.date) -> list[float]:
         knot_insts = self._knots_instruments[date]
         pvs = np.zeros(len(knot_insts))
-        self.curve.update_node(date, np.exp(values[0]))
+        self._curve.update_node(date, np.exp(values[0]))
         for ki, inst in enumerate(knot_insts):
             pvs[ki] = self.get_instrument_pv(inst)
         
-        dvalue = self.curve.get_val_dcf(date) * EPSILON
+        dvalue = self._curve.get_val_dcf(date) * EPSILON
         pvs_up = np.zeros(len(knot_insts))
         value_up = values[0] + dvalue
-        self.curve.update_node(date, np.exp(value_up))
+        self._curve.update_node(date, np.exp(value_up))
         for ki, inst in enumerate(knot_insts):
             pvs_up[ki] = self.get_instrument_pv(inst)
         # pvs_down = np.zeros(len(knot_insts))
         # value_down = values[0] - dvalue
-        # self.curve.update_node(date, np.exp(value_down))
+        # self._curve.update_node(date, np.exp(value_down))
         # for ki, inst in enumerate(knot_insts):
         #     pvs_down[ki] = self.get_instrument_pv(inst)
 
@@ -186,43 +171,23 @@ class RateCurveModel(NameClass):
     
     def set_convexity(self) -> None:
         for f_ins in self._instruments:
-            if isinstance(f_ins, RateFutureC):
-                f_ins.set_convexity(self._rate_vol_curve)
+            f_ins.set_convexity(self._rate_vol_curve)
         return
     
     def calibrate_convexity(self, node_vol_date: dtm.date = None) -> None:
         self._constructor.build_simple()
         if node_vol_date is None:
             node_vol_date = self.date
-        for sw_ins in self._instruments:
-            if isinstance(sw_ins, SwapBaseC) and sw_ins.exclude_knot and sw_ins.end_date > node_vol_date:
-                if isinstance(sw_ins, DomesticSwap):
-                    fut_implied_par = sw_ins.get_par(self.curve)
-                    sw_crv_diff = fut_implied_par - sw_ins.fix_rate(self.date)
-                elif isinstance(sw_ins, BasisSwap):
-                    fut_implied_par = sw_ins.get_par(leg1_forward_curve=self.curve,
-                                                     leg2_forward_curve=self.collateral_curve)
-                    sw_crv_diff = fut_implied_par - sw_ins.spread(self.date)
+        for inst in self._instruments:
+            if inst.is_convexity_swap(node_vol_date):
                 node_vol = self._rate_vol_curve.get_node(node_vol_date)
-                logger.critical(f'{sw_ins.name} Implied Rate={fut_implied_par/sw_ins._units}, Market Rate={sw_ins.data[self.date]}')
-                if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE:
-                    sw_dcf_1 = self.curve.get_dcf(self.curve.date, node_vol_date)
-                    sw_dcf_2 = self.curve.get_dcf(self.curve.date, sw_ins.end_date)
-                    pv01_unit = abs(sw_ins.get_pv01(self.curve) * 10000 / sw_ins.notional)
-                    var_offset = np.log(1 + sw_crv_diff * pv01_unit / self.curve.get_df(sw_ins.end_date)) *\
-                                    12 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
-                    # var_offset = sw_crv_diff * 12 * sw_dcf_2 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
-                    var_adjusted = np.square(node_vol) + var_offset
-                    vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
-                    logger.critical(f'Rate Vol Adjusted for {sw_ins.end_date} = {vol_adjusted}')
-                    if node_vol == vol_adjusted:
-                        node_vol_date = sw_ins.end_date
-                        self._rate_vol_curve.add_node(node_vol_date, node_vol)
-                    else:
-                        self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
-                        return self.calibrate_convexity(node_vol_date)
+                vol_adjusted = inst.get_convexity_adjustment(
+                    self._curve, node_vol_date, node_vol, self._collateral_curve)
+                if vol_adjusted is not None and node_vol != vol_adjusted:
+                    self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
+                    return self.calibrate_convexity(node_vol_date)
                 else:
-                    node_vol_date = sw_ins.end_date
+                    node_vol_date = inst.end
                     self._rate_vol_curve.add_node(node_vol_date, node_vol)
         return
 
@@ -233,8 +198,8 @@ class RateCurveGroupModel(NameDateClass):
     _calendar: Calendar
 
     def __post_init__(self):
-        for crv_mod in self._models:
-            crv_mod._constructor = self
+        for crv_model in self._models:
+            crv_model._constructor = self
     
     @property
     def models(self) -> list[RateCurveModel]:
@@ -242,24 +207,24 @@ class RateCurveGroupModel(NameDateClass):
     
     @property
     def curves(self) -> list[RateCurve]:
-        return [crv_mod.curve for crv_mod in self.models]
+        return [crv_model.curve for crv_model in self.models]
     
     def get_bootstrap_knots(self) -> list[dtm.date]:
         knot_dates = set()
-        for crv_mod in self.models:
-            knot_dates = knot_dates.union(crv_mod._knots)
+        for crv_model in self.models:
+            knot_dates = knot_dates.union(crv_model._knots)
         return sorted(list(knot_dates))
     
     def build_bootstrap(self, iter: int = 1) -> bool:
-        nodes_in = [deepcopy(crv_mod.curve.nodes) for crv_mod in self.models]
+        nodes_in = [deepcopy(crv_model.curve.nodes) for crv_model in self.models]
         for k in self.get_bootstrap_knots():
-            for crv_mod in self.models:
-                if k not in crv_mod._knots:
+            for crv_model in self.models:
+                if k not in crv_model._knots:
                     continue
-                crv_mod.solve_knot(k)
-        for i, crv_mod in enumerate(self.models):
+                crv_model.solve_knot(k)
+        for i, crv_model in enumerate(self.models):
             error = 0
-            for j, nd in enumerate(crv_mod.curve.nodes):
+            for j, nd in enumerate(crv_model.curve.nodes):
                 assert nodes_in[i][j].date == nd.date, f"Unexpected nodes mismatch {nodes_in[i][j]} {nd}"
                 error += abs(nodes_in[i][j].value - nd.value)
             if error > CURVE_SOLVER_TOLERANCE:
@@ -271,46 +236,46 @@ class RateCurveGroupModel(NameDateClass):
     
     def set_nodes(self, log_values: list[float]):
         knot_lens_sum = [0]
-        for crv_mod in self.models:
-            knot_lens_sum.append(knot_lens_sum[-1] + len(crv_mod._knots))
-            crv_mod.curve.update_nodes(log_values[knot_lens_sum[-2] : knot_lens_sum[-1]])
+        for crv_model in self.models:
+            knot_lens_sum.append(knot_lens_sum[-1] + len(crv_model._knots))
+            crv_model.curve.update_nodes(log_values[knot_lens_sum[-2] : knot_lens_sum[-1]])
         return
     
     def get_solver_error(self, log_values: list[float]) -> float:
         errors = []
         self.set_nodes(log_values)
-        for crv_mod in self.models:
-            for ins in crv_mod.knot_instruments():
-                errors.append(crv_mod.get_instrument_pv(ins))
+        for crv_model in self.models:
+            for ins in crv_model.knot_instruments():
+                errors.append(crv_model.get_instrument_pv(ins))
         return np.sqrt(np.mean(np.array(errors)**2))
     
     def get_jacobian(self, log_values: list[float] = None) -> list[float]:
         self.set_nodes(log_values)
 
         knot_count = len(log_values)
-        instr_count = sum([len(crv_mod.knot_instruments()) for crv_mod in self.models])
+        instr_count = sum([len(crv_model.knot_instruments()) for crv_model in self.models])
         pvs = np.zeros(instr_count)
         pvs_up = np.zeros((knot_count, instr_count))
         kn, ki = 0, 0
-        for crv_mod in self.models:
-            for inst in crv_mod.knot_instruments():
-                pvs[ki] = crv_mod.get_instrument_pv(inst)
+        for crv_model in self.models:
+            for inst in crv_model.knot_instruments():
+                pvs[ki] = crv_model.get_instrument_pv(inst)
                 ki += 1
             
-            for knot in crv_mod._knots:
-                df = crv_mod.curve.get_df(knot)
+            for knot in crv_model._knots:
+                df = crv_model.curve.get_df(knot)
                 df_up = df * np.exp(EPSILON)
-                crv_mod.curve.update_node(knot, df_up)
+                crv_model.curve.update_node(knot, df_up)
                 
                 kj = 0
-                for crv_mod_j in self.models:
-                    for inst in crv_mod_j.knot_instruments():
+                for crv_model_j in self.models:
+                    for inst in crv_model_j.knot_instruments():
                         # if knot <= inst.knot:
-                        pvs_up[kn][kj] = crv_mod_j.get_instrument_pv(inst)
+                        pvs_up[kn][kj] = crv_model_j.get_instrument_pv(inst)
                         kj += 1
                 # df_down = df * np.exp(-EPSILON)
-                # crv_mod.curve.update_node(kn, df_down)
-                crv_mod.curve.update_node(knot, df)
+                # crv_model.curve.update_node(kn, df_down)
+                crv_model.curve.update_node(knot, df)
                 kn += 1
 
         gradient = np.zeros(knot_count)
@@ -321,7 +286,7 @@ class RateCurveGroupModel(NameDateClass):
         return gradient
     
     def build_solver(self) -> bool:
-        knot_count = sum([len(crv_mod._knots) for crv_mod in self.models])
+        knot_count = sum([len(crv_model._knots) for crv_model in self.models])
         init_guess = np.zeros(knot_count, dtype=float)
         res = solver.find_fit(cost_f=self.get_solver_error,
                               init_guess=init_guess,
@@ -330,8 +295,8 @@ class RateCurveGroupModel(NameDateClass):
         return True
     
     def build_simple(self) -> bool:
-        for crv_mod in self.models:
-            crv_mod.reset(self.date)
+        for crv_model in self.models:
+            crv_model.reset(self.date)
         # return self.build_solver()
         return self.build_bootstrap()
     
@@ -358,11 +323,11 @@ class RateCurveGroupModel(NameDateClass):
         for yc in self.curves:
             bdates = get_bdate_series(self.date, yc.nodes[-1].date, self._calendar)
             fwd_rates_i = {}
-            node_zrates_i = {}
+            # node_zrates_i = {}
             for id, dt in enumerate(bdates[:-1]):
                 fwd_rates_i[dt] = yc.get_forward_rate(dt, bdates[id+1])
-            for nd in yc._nodes:
-                node_zrates_i[nd.date] = yc.get_spot_rate(nd.date)
+            # for nd in yc._nodes:
+            #     node_zrates_i[nd.date] = yc.get_spot_rate(nd.date)
             fwd_rates[yc.display_name()] = pd.Series(fwd_rates_i)
-            node_zrates[yc.display_name()] = pd.Series(node_zrates_i)
+            # node_zrates[yc.display_name()] = pd.Series(node_zrates_i)
         return fwd_rates, node_zrates

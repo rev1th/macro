@@ -3,16 +3,14 @@ from io import StringIO
 import pandas as pd
 
 from common import request_web as request
-from common.chrono import Frequency, Tenor
-from instruments.bond import ZeroCouponBond
-from instruments.coupon_bond import FixCouponBond
 from common import sql
-from data_api.config import META_DB, PRICES_DB
+from data_api.db_config import META_DB, PRICES_DB
+from data_api.treasury_config import *
 
 
-BONDS_PRICE_TABLE = 'bonds_close'
 BONDS_PRICES_URL = 'https://savingsbonds.gov/GA-FI/FedInvest/securityPriceDetail'
 COL_NAMES = ['CUSIP', 'TYPE', 'RATE', 'MATURITY_DATE', 'CALL_DATE', 'BUY', 'SELL', 'EOD']
+CUSIP_COL, BUY_COL, SELL_COL, CLOSE_COL = (COL_NAMES[id] for id in [0, -3, -2, -1])
 def load_bonds_price(date: dtm.date) -> pd.DataFrame:
     params = {
         'priceDateDay': date.day,
@@ -37,25 +35,8 @@ def load_bonds_price(date: dtm.date) -> pd.DataFrame:
         return sql.modify(insert_query, PRICES_DB)
     return False
 
-CUSIP_COL, BUY_COL, SELL_COL, CLOSE_COL = (COL_NAMES[id] for id in [0, -3, -2, -1])
-def get_bonds_price(date: dtm.date) -> dict[str, float]:
-    price_query = f"SELECT id, price, buy, sell FROM {BONDS_PRICE_TABLE} WHERE date='{date.strftime(sql.DATE_FORMAT)}'"
-    prices_list = sql.fetch(price_query, PRICES_DB)
-    if not prices_list:
-        load_res = load_bonds_price(date)
-        if isinstance(load_res, pd.DataFrame):
-            price_df = load_res[load_res[BUY_COL] > 0]
-            mid = (price_df[BUY_COL] + price_df[SELL_COL]) / 2
-            spread = price_df[BUY_COL] - price_df[SELL_COL]
-            return dict(zip(price_df[CUSIP_COL], zip(mid, spread)))
-        prices_list = sql.fetch(price_query, PRICES_DB)
-    res = {}
-    for row in prices_list:
-        res[row[0]] = row[1], None if row[2] == 0 else row[2]-row[3]
-    return res
 
-
-BONDS_REF_TABLE = 'bond_reference'
+# BONDS_ARCHIVE_CUTOFF = dtm.date(2024, 1, 1).strftime(sql.DATE_FORMAT)
 BONDS_DETAILS_URL = 'https://www.treasurydirect.gov/TA_WS/securities/search'
 def load_bonds_details(start: dtm.date):
     params = {
@@ -83,42 +64,25 @@ def load_bonds_details(start: dtm.date):
         else:
             assert bond_type in ('Bill', 'FRN'), f'Invalid coupon rate for {bond_type}'
             coupon = 'NULL'
-        insert_rows.append(f"""
-    ('{bi['cusip']}', '{bond_type}', '{maturity_date}', {coupon}, '{issue_date}', '{original_term}')""")
+        if bond_type == 'TIPS':
+            base_value = float(bi['refCpiOnDatedDate'])
+            base_date = bi['originalDatedDate'] if bi['originalDatedDate'] else bi['datedDate']
+            base_date = f"'{dtm.datetime.fromisoformat(base_date).strftime(sql.DATE_FORMAT)}'"
+        else:
+            base_value, base_date = 'NULL', 'NULL'
+        insert_rows.append("\n("\
+    f"'{bi['cusip']}', '{bond_type}', '{maturity_date}', {coupon}, '{issue_date}', "\
+    f"'{original_term}', {base_value}, {base_date})""")
     if insert_rows:
         insert_query = f"INSERT OR IGNORE INTO {BONDS_REF_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, META_DB)
     else:
         return True
 
-def get_zero_bonds(date: dtm.date) -> list[ZeroCouponBond]:
-    select_query = f"""SELECT id, maturity FROM {BONDS_REF_TABLE}
-    WHERE type in ('Bill') AND maturity > '{date.strftime(sql.DATE_FORMAT)}'"""
-    select_res = sql.fetch(select_query, META_DB)
-    settle_delay = Tenor.bday(1)
-    bonds_list = []
-    for row in select_res:
-        maturity_date = dtm.datetime.strptime(row[1], sql.DATE_FORMAT)
-        bonds_list.append(ZeroCouponBond(maturity_date, _settle_delay=settle_delay, name=row[0]))
-    return bonds_list
-
-def get_coupon_bonds(date: dtm.date) -> list[FixCouponBond]:
-    select_query = f"""SELECT id, maturity, coupon, original_issue_date, original_term FROM {BONDS_REF_TABLE}
-    WHERE type in ('Bond', 'Note') AND maturity > '{date.strftime(sql.DATE_FORMAT)}'"""
-    select_res = sql.fetch(select_query, META_DB)
-    settle_delay = Tenor.bday(1)
-    bonds_list = []
-    for row in select_res:
-        maturity_date = dtm.datetime.strptime(row[1], sql.DATE_FORMAT)
-        issue_date = dtm.datetime.strptime(row[3], sql.DATE_FORMAT)
-        term = row[4][:-1]
-        bonds_list.append(FixCouponBond(maturity_date, row[2], Frequency.SemiAnnual, issue_date,
-                                        _original_term=term, _settle_delay=settle_delay, name=row[0]))
-    return bonds_list
 
 if __name__ == '__main__':
     # start = dtm.date(1994, 1, 1)
-    start = dtm.date(2024, 8, 1)
+    start = dtm.date(2024, 10, 1)
     load_bonds_details(start)
     # from markets import usd_lib
     # for dt in usd_lib.get_valuation_dates(start):
@@ -126,6 +90,7 @@ if __name__ == '__main__':
 
 # create_query = f"""CREATE TABLE {BONDS_REF_TABLE} (
 #     id TEXT, type TEXT, maturity TEXT, coupon REAL, original_issue_date TEXT, original_term TEXT,
+#     base_index_value REAL, base_index_date TEXT,
 #     CONSTRAINT {BONDS_REF_TABLE}_pk PRIMARY KEY (id)
 # )"""
 # sql.modify(create_query, META_DB)

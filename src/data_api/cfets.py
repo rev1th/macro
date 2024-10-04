@@ -42,9 +42,9 @@ def url_get_retry(url: str, params: dict[str, str]):
     while True:
         try:
             return request.url_get(url, params=params, headers=SNAP_HEADERS)
-        except:
+        except Exception as ex:
             # Open https://www.chinamoney.com.cn/english/bmkycvfcc/ in your web browser and continue
-            pass
+            logger.warning(f'Exception: {ex}')
 
 def load_swaps(fixing_type: str = 'FR007') -> tuple[dtm.date, dict[str, float]]:
     content = url_get_retry(SNAP_URL + SWAPS_EP, params={'cfgItemType': SWAPS_CODEMAP[fixing_type]})

@@ -4,7 +4,7 @@ import datetime as dtm
 from typing import Optional, ClassVar
 
 from common.models.future import Future
-from instruments.coupon_bond import FixCouponBond
+from instruments.bond.coupon_bond import FixCouponBond
 from instruments.rate_curve import RateCurve
 
 

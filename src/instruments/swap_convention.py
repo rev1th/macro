@@ -2,12 +2,12 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 from enum import StrEnum
-from typing import Optional
+from typing import ClassVar
 
 from common.chrono import Tenor, Frequency, BDayAdjust, BDayAdjustType
 from common.chrono.daycount import DayCount
 from common.currency import Currency
-from instruments.fixing import Fixing, RateFixingType
+from instruments.fixing import RateFixing, RateFixingType
 
 
 @dataclass(frozen=True)
@@ -74,31 +74,24 @@ class SwapFixLegConvention(SwapLegConvention):
 
 @dataclass(frozen=True)
 class SwapFloatLegConvention(SwapLegConvention):
-
-    _fixing: str
+    _fixing_id: str
     _fixing_type: str
     _fixing_lag: str
-    _fixing_calendar: Optional[str] = None
-    _reset_frequency: Optional[str] = None
+    _fixing_calendar: str | None = None
+    _reset_frequency: str | None = None
     
-    @property
-    def fixing(self):
-        return Fixing(name=self._fixing)
-    
-    @property
-    def fixing_type(self):
-        return RateFixingType(self._fixing_type)
+    def __post_init__(self):
+        self.__dict__['fixing'] = RateFixing(RateFixingType(self._fixing_type), name=self._fixing_id)
     
     def fixing_lag(self):
         fixing_calendar = self._fixing_calendar if self._fixing_calendar else self._coupon_calendar
         return Tenor((self._fixing_lag, fixing_calendar))
     
-    @property
     def reset_frequency(self):
         return Frequency(self._reset_frequency)
     
     def is_interim_reset(self) -> bool:
-        return self.fixing_type == RateFixingType.IBOR and self._reset_frequency \
+        return self._fixing_type == RateFixingType.IBOR and self._reset_frequency \
             and self._reset_frequency != self._coupon_frequency
 
 

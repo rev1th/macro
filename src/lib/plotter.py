@@ -1,6 +1,6 @@
 import pandas as pd
 # import plotly.express as px
-from common import plotter
+from common.app import plotter
 
 RATE_FORMAT = ',.3%'
 RATE_NAME_1 = 'Forward Rate (%)'

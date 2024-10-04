@@ -1,13 +1,11 @@
 import dash
-from dash import html, dcc
-from dash import callback, Output, Input, State
+from dash import html, dcc, callback, Output, Input, State
 import datetime as dtm
 import pandas as pd
 
-from data_api import nyfed
-from common import plotter
+from common.app import plotter, style
+from data_api import nyfed_client
 from lib.plotter import DATE_FORMAT
-from pages import config
 
 dash.register_page(__name__)
 
@@ -25,7 +23,7 @@ layout = html.Div([
             type='default',
         ),
         html.Div(id='fixings-curve'),
-    ], style=config.DIV_STYLE), label='Fixings'),
+    ], style=style.get_div_style()), label='Fixings'),
 ])
 
 @callback(
@@ -34,7 +32,7 @@ layout = html.Div([
     prevent_initial_call=True,
 )
 def update_fixings(*_):
-    nyfed.update()
+    nyfed_client.update()
     return None
 
 @callback(
@@ -45,6 +43,6 @@ def update_fixings(*_):
 )
 def load_fixings(from_date_str: str, *_):
     from_date = dtm.date.fromisoformat(from_date_str) if from_date_str else dtm.date(2024, 1, 1)
-    fix_data = {k: pd.Series(dict(v)) for k, v in nyfed.get(from_date).items()}
+    fix_data = {k: pd.Series(dict(v)) for k, v in nyfed_client.get(from_date).items()}
     fig = plotter.get_figure(fix_data, title='Rates', x_name='Date', x_format=DATE_FORMAT, y_name='Rate (%)')
-    return [dcc.Graph(figure=fig, style=config.GRAPH_STYLE)], None
+    return [dcc.Graph(figure=fig, style=style.get_graph_style())], None

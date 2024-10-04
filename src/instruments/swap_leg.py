@@ -25,10 +25,6 @@ class SwapLeg:
         self.coupon_pay_dates = [pay_delay.get_date(rd) for rd in self.coupon_dates]
     
     @property
-    def notional(self) -> float:
-        return self._notional
-    
-    @property
     def notional_exchange(self):
         return self._convention.notional_exchange
     
@@ -44,7 +40,7 @@ class SwapLeg:
         for cp_i in range(len(self.coupon_dates)):
             cp_d_i = self.coupon_dates[cp_i]
             cp_pd_i = self.coupon_pay_dates[cp_i]
-            annuity += self.notional * self.get_dcf(accrual_start_date, cp_d_i) * discount_curve.get_df(cp_pd_i)
+            annuity += self._notional * self.get_dcf(accrual_start_date, cp_d_i) * discount_curve.get_df(cp_pd_i)
             accrual_start_date = cp_d_i
         return annuity
 
@@ -55,10 +51,10 @@ class SwapFixLeg(SwapLeg):
     def get_pv(self, discount_curve: RateCurve) -> float:
         pv = 0
         if self.notional_exchange.initial:
-            pv += self.notional * discount_curve.get_df(self._start_date)
+            pv += self._notional * discount_curve.get_df(self._start_date)
         pv += self.get_annuity(discount_curve=discount_curve) * self._rate
         if self.notional_exchange.final:
-            pv += self.notional * discount_curve.get_df(self._end_date)
+            pv += self._notional * discount_curve.get_df(self._end_date)
         return pv
 
 @dataclass
@@ -74,7 +70,7 @@ class SwapFloatLeg(SwapLeg):
         fixing_periods = [[] for _ in range(len(self.coupon_dates))]
         fixing_lag = self._convention.fixing_lag()
         if self._convention.is_interim_reset():
-            reset_freq = self._convention.reset_frequency
+            reset_freq = self._convention.reset_frequency()
             for a_id in range(1, len(accrual_dates)):
                 reset_dates = reset_freq.generate_schedule(
                     accrual_dates[a_id-1], accrual_dates[a_id],
@@ -101,15 +97,15 @@ class SwapFloatLeg(SwapLeg):
             forward_curve = discount_curve
         pv = 0
         if self.notional_exchange.initial:
-            pv += self.notional * discount_curve.get_df(self._start_date)
+            pv += self._notional * discount_curve.get_df(self._start_date)
         for cp_i in range(len(self.coupon_dates)):
             forecast_rate = 0
             for fix_i in self.fixing_periods[cp_i]:
                 forecast_rate = (1 + forecast_rate) * \
                                 (1 + get_forecast_rate(fix_i[0][0], fix_i[0][1], forward_curve, self.fixing) * \
                                     self.get_dcf(fix_i[1][0], fix_i[1][1])) - 1
-            pv += self.notional * (forecast_rate + self._spread) * \
+            pv += self._notional * (forecast_rate + self._spread) * \
                     discount_curve.get_df(self.coupon_pay_dates[cp_i])
         if self.notional_exchange.final:
-            pv += self.notional * discount_curve.get_df(self._end_date)
+            pv += self._notional * discount_curve.get_df(self._end_date)
         return pv

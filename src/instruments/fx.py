@@ -6,7 +6,6 @@ import datetime as dtm
 from common.chrono.tenor import Tenor
 from common.currency import Currency
 from common.models.base_instrument import BaseInstrument
-from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_curve import RateCurve
 
 
@@ -67,13 +66,6 @@ class FXSwap(FXBase):
     @property
     def near_leg_settle_date(self) -> dtm.date:
         return self._near_leg_settle_date
-
-@dataclass
-class FXSwapC(FXSwap, CurveInstrument):
-    _end: dtm.date = field(init=False)
-
-    def __post_init__(self):
-        self._end = self._far_leg_settle_date
     
     def get_pv(self, discount_curve: RateCurve, ref_discount_curve: RateCurve, spot: FXSpot) -> float:
         if self.far_leg_settle_date and self.far_leg_settle_date != spot.settle_date:
@@ -92,7 +84,7 @@ class FXSwapC(FXSwap, CurveInstrument):
             fwd_pts = (ccy2_far_df / ccy1_far_df - ccy2_near_df / ccy1_near_df) * spot_price
         else:
             fwd_pts = (ccy1_far_df / ccy2_far_df - ccy1_near_df / ccy2_near_df) * spot_price
-        return self.notional * (fwd_pts - self.data[value_date] * self._units)
+        return (fwd_pts - self.data[value_date] * self._units)
 
 
 @dataclass

@@ -1,6 +1,5 @@
 from pydantic.dataclasses import dataclass
 from typing import ClassVar
-import logging
 import numpy as np
 import statsmodels.api as sm
 import pandas as pd
@@ -11,10 +10,8 @@ from common.chrono.tenor import Tenor
 from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
-from instruments.bond import Bond, BondYieldParameters
+from instruments.bond.bond import Bond, BondYieldParameters
 from models.curve_context import CurveContext
-
-logger = logging.Logger(__name__)
 
 
 @dataclass
@@ -29,22 +26,23 @@ class BondCurveModel(NameDateClass):
     def build(self) -> True:
         """Builds bond curve"""
     
-    def get_measures(self, date: dtm.date = None) -> pd.DataFrame:
-        measures = []
-        if date:
-            rolled_curve = RollForwardCurve(self.spread_curve, date)
-        for bnd, _ in sorted(self._bonds):
-            if date and date > bnd.settle_date:
-                if date < bnd.maturity_date:
-                    bnd = bnd.roll_date(date)
-                    if bnd.settle_date < bnd.maturity_date:
-                        bnd._price = bnd.get_price_from_curve(rolled_curve)
-                    else:
-                        continue
-                else:
-                    continue
-            measures.append((bnd.display_name(), bnd.maturity_date, bnd.price, bnd.get_full_price(), bnd.get_yield()))
-        return pd.DataFrame(measures, columns=['Name', 'Maturity', 'Market Price', 'Full Price', 'Yield'])
+    def get_graph_info(self):
+        bond_measures = []
+        curve = CurveContext().get_rate_curve(self._base_curve, self.date)
+        yield_method = BondYieldParameters()
+        for bnd, _ in self._bonds:
+            date = bnd.maturity_date
+            bond_measures.append([
+                date,
+                self.spread_curve.get_spread_rate(date, yield_method._compounding),
+                bnd.get_zspread(self.date, curve),
+                bnd.display_name(),
+            ])
+        bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Asset Spread', 'ZSpread', 'Name'])
+        bond_df.set_index('Maturity', inplace=True)
+        bond_df.sort_index(inplace=True)
+        prefix = f"{self.name}:{dtm.datetime.strftime(self.date, '%d-%b')}:"
+        return {prefix: bond_df}, None
 
 
 # Nelson Seigel method
@@ -56,8 +54,8 @@ class BondCurveNS(NameDateClass):
     _coeffs: tuple[float, float, float]
     _decay_rate: float
 
-    def get_rate(self, bond: Bond) -> float:
-        dcf = self._daycount.get_dcf(bond.settle_date(self.date), bond.maturity_date)
+    def get_spread_rate(self, date: dtm.date, *args) -> float:
+        dcf = self._daycount.get_dcf(self.date, date)
         decay_rate = self._decay_rate
         decay_factor = np.exp(-self._decay_rate * dcf)
         slope_factor = (1 - decay_factor) / (decay_rate * dcf)
@@ -68,7 +66,7 @@ class BondCurveModelNS(BondCurveModel):
     _decay_rate: float = 1
     _daycount: DayCount = DayCount.ACT365
 
-    curve: ClassVar[BondCurveNS]
+    spread_curve: ClassVar[BondCurveNS]
 
     def get_factor_params(self):
         xs = []
@@ -86,7 +84,7 @@ class BondCurveModelNS(BondCurveModel):
         y = [bond.get_zspread(self.date, crv) for bond, _ in self._bonds]
         # x_in = sm.add_constant(r_v[0], prepend=False)
         res = sm.OLS(y, x_in).fit()
-        self.curve = BondCurveNS(self.date, self._base_curve, self._daycount, tuple(res.params), self._decay_rate)
+        self.spread_curve = BondCurveNS(self.date, self._base_curve, self._daycount, tuple(res.params), self._decay_rate)
         return True
 
 
@@ -156,21 +154,3 @@ class BondCurveModelNP(BondCurveModel):
                                         name=self.name)
         CurveContext().update_bond_curve(self.spread_curve)
         return self.build_solver()
-    
-    def get_graph_info(self):
-        bond_measures = []
-        curve = CurveContext().get_rate_curve(self._base_curve, self.date)
-        yield_method = BondYieldParameters()
-        for bnd, _ in self._bonds:
-            date = bnd.maturity_date
-            bond_measures.append([
-                date,
-                self.spread_curve.get_spread_rate(date, yield_method._compounding),
-                bnd.get_zspread(self.date, curve),
-                bnd.display_name(),
-            ])
-        bond_df = pd.DataFrame(bond_measures, columns=['Maturity', 'Asset Spread', 'ZSpread', 'Name'])
-        bond_df.set_index('Maturity', inplace=True)
-        bond_df.sort_index(inplace=True)
-        prefix = f"{dtm.datetime.strftime(self.date, '%d-%b')}:"
-        return {prefix: bond_df}, None

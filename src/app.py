@@ -1,8 +1,9 @@
 import dash
 from dash import Dash, html, dcc
-from pages.config import DIV_STYLE
+from common.app import style
 
 
+DIV_STYLE = style.get_div_style()
 app = Dash(__name__, use_pages=True)
 app.layout = html.Div([
     html.H3('Macro Analytics App', style=DIV_STYLE),

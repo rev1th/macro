@@ -2,10 +2,10 @@ import datetime as dtm
 
 from common.chrono import get_bdate_series
 from instruments.rate_curve import RateCurve
-from instruments.fixing import Fixing
+from instruments.fixing import RateFixing
 from models.data_context import DataContext
 
-def get_forecast_rate(from_date: dtm.date, to_date: dtm.date, curve: RateCurve, fixing: Fixing = None) -> float:
+def get_forecast_rate(from_date: dtm.date, to_date: dtm.date, curve: RateCurve, fixing: RateFixing = None) -> float:
     assert from_date <= to_date, f"Invalid period to calculate forecast rate {from_date}-{to_date}"
     context = DataContext()
     if from_date < curve.date:

@@ -1,11 +1,11 @@
 from pydantic.dataclasses import dataclass
 import datetime as dtm
 
-from common.chrono.tenor import Tenor
-from instruments.coupon_bond import FixCouponBond, CashFlow, BondYieldParameters
-from instruments.bond_future import BondFutureBond
 from common import sql
-from data_api.config import META_DB
+from common.chrono.tenor import Tenor
+from instruments.bond.coupon_bond import FixCouponBond, CashFlow, BondYieldParameters
+from instruments.bond_future import BondFutureBond
+from data_api.db_config import META_DB
 
 
 BONDFUT_REF_TABLE = 'bond_futures_reference'
@@ -13,7 +13,7 @@ FUTPROD_TENORS = {
     'ZT': (1+9/12, 2, 5+3/12, {}),
     # 'Z3N': (2+9/12, 3, 7, {}),
     'ZF': (4+2/12, 5+3/12, 5+3/12, {}),
-    'ZN': (6+1/2, 7+3/4, None, {'_month_increment': 3}),
+    'ZN': (6+1/2, 8, None, {'_month_increment': 3}),
     'TN': (9+5/12, 10, 10, {'_month_increment': 3}),
     'ZB': (15, 25, None, {'_month_increment': 3}),
     # 'TWE': (19+2/12, 19+11/12, None, {}),

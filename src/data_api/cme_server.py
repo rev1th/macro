@@ -5,7 +5,8 @@ import argparse
 from common import request_web as request
 from common.models.data import DataPointType, OptionDataFlag
 from common import sql
-from data_api.config import META_DB, PRICES_DB
+from data_api.db_config import META_DB, PRICES_DB
+from data_api.cme_config import *
 
 logger = logging.Logger(__name__)
 
@@ -83,11 +84,6 @@ FUT_PRODCODE_MAP = {
     'ZB': '17',
     'UB': 'UBE',
 }
-
-FUT_TABLE = 'futures'
-RATE_FUT_PROD_TABLE = 'rate_futures_contracts'
-BOND_FUT_PROD_TABLE = 'bond_futures_contracts'
-OPT_PROD_TABLE = 'options_contracts'
 FUTPROD_DATE_FORMAT = '%d %b %Y'
 
 def update_futures_list(series: str):
@@ -153,46 +149,17 @@ def update_options_list(series: str):
         return sql.modify(insert_query, META_DB)
     return False
 
-def get_futures_contracts(series: str):
-    underlier_query = f"SELECT underlier_code, lot_size FROM {FUT_TABLE} WHERE future_code='{series}'"
-    underlier, lot_size = sql.fetch(underlier_query, META_DB, count=1)
-    contracts_query = "SELECT contract_code, last_trade_date, settlement_date "\
-    f"FROM {RATE_FUT_PROD_TABLE} WHERE series_id='{series}' ORDER BY last_trade_date"
-    contracts_list = sql.fetch(contracts_query, META_DB)
-    contracts_fmt = [(row[0], dtm.datetime.strptime(row[1], sql.DATE_FORMAT).date(),
-                    dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date(), underlier, lot_size)
-                    for row in contracts_list]
-    return contracts_fmt
-
-def get_bond_futures_contracts(series: str):
-    contracts_query = "SELECT contract_code, last_trade_date, first_delivery_date, last_delivery_date "\
-    f"FROM {BOND_FUT_PROD_TABLE} WHERE series_id='{series}'"
-    contracts_list = sql.fetch(contracts_query, META_DB)
-    contracts_fmt = [(row[0], dtm.datetime.strptime(row[1], sql.DATE_FORMAT).date(),
-                    dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date(),
-                    dtm.datetime.strptime(row[3], sql.DATE_FORMAT).date()
-                    ) for row in contracts_list]
-    return contracts_fmt
-
-def get_options_contracts(series: str):
-    contracts_query = "SELECT contract_code, underlier_code, last_trade_date "\
-    f"FROM {OPT_PROD_TABLE} WHERE series_id='{series}' ORDER BY last_trade_date"
-    contracts_list = sql.fetch(contracts_query, META_DB)
-    contracts_fmt = [(row[0], row[1], dtm.datetime.strptime(row[2], sql.DATE_FORMAT).date())
-                    for row in contracts_list]
-    return contracts_fmt
-
 
 def request_get_retry(url: str, max_tries: int = 3, **kwargs):
     try:
         return request.get_json(request.url_get(url, headers=HEADERS, **kwargs))
     except Exception as ex:
         if max_tries <= 0:
-            logger.warning(f'Request error: {ex}')
+            logger.warning(f'Exception: {ex}')
         return request_get_retry(url, max_tries-1, **kwargs)
 
 FUT_DATA_DATES_EP = 'Settlements/Futures/TradeDate/{code}'
-def load_fut_data_dates(code: str = 'SR1') -> list[dtm.date]:
+def load_future_data_dates(code: str = 'SR1') -> list[dtm.date]:
     fut_settle_dates_url = f'{HOME_URL}{FUT_DATA_DATES_EP}'.format(code=FUT_PRODID_MAP[code])
     content_json = request_get_retry(fut_settle_dates_url)
     settle_dates = []
@@ -200,7 +167,6 @@ def load_fut_data_dates(code: str = 'SR1') -> list[dtm.date]:
         settle_dates.append(dtm.datetime.strptime(dr[0], DATE_FORMAT).date())
     return settle_dates
 
-FUTURES_PRICE_TABLE = 'futures_settle'
 FUT_PROD_TICKS = {
     'ZT': {'extra_tick_count': 8},
     'ZF': {'extra_tick_count': 4},
@@ -210,9 +176,9 @@ FUT_PROD_TICKS = {
     'UB': {},
 }
 FUT_SETTLE_EP = 'Settlements/Futures/Settlements/{code}/FUT'
-def load_future_settle_prices(code: str, settle_date: dtm.date):
-    price_params = FUT_PROD_TICKS.get(code, None)
-    fut_settle_url = f'{HOME_URL}{FUT_SETTLE_EP}'.format(code=FUT_PRODID_MAP[code])
+def load_future_settle_prices(series: str, settle_date: dtm.date):
+    price_params = FUT_PROD_TICKS.get(series, None)
+    fut_settle_url = f'{HOME_URL}{FUT_SETTLE_EP}'.format(code=FUT_PRODID_MAP[series])
     content_json = request_get_retry(fut_settle_url, params={'tradeDate': settle_date.strftime(DATE_FORMAT)})
     # assert settle_date == content_json["tradeDate"], f"Inconsistent prices {settle_date}"
     settlements = content_json["settlements"]
@@ -222,7 +188,7 @@ def load_future_settle_prices(code: str, settle_date: dtm.date):
         oi, volume = get_field(fut_r, DataPointType.PREV_OI), get_field(fut_r, DataPointType.VOLUME)
         if volume > 0 and settle_price:
             month_strs = fut_r['month'].split(' ')
-            contract_code = f'{code}{get_month_code(month_strs[0])}{month_strs[1]}'
+            contract_code = f'{series}{get_month_code(month_strs[0])}{month_strs[1]}'
             insert_rows.append("\n("\
     f"'{contract_code}', '{settle_date.strftime(sql.DATE_FORMAT)}', {settle_price}, {volume}, {oi})")
     if insert_rows:
@@ -230,36 +196,10 @@ def load_future_settle_prices(code: str, settle_date: dtm.date):
         return sql.modify(insert_query, PRICES_DB)
     return False
 
-FUT_OI_MIN_MAX = 0.01
-def get_future_settle_prices(code: str, settle_date: dtm.date):
-    price_query = f"SELECT contract_code, close_price, open_interest FROM {FUTURES_PRICE_TABLE} "\
-    f"WHERE contract_code LIKE '{code}%' AND date='{settle_date.strftime(sql.DATE_FORMAT)}'"
-    prices_list = sql.fetch(price_query, PRICES_DB)
-    if not prices_list:
-        fut_data_dates = load_fut_data_dates(code=code)
-        if settle_date > fut_data_dates[0]:
-            return load_future_quotes(code)[1]
-        elif settle_date in fut_data_dates:
-            if not load_future_settle_prices(code, settle_date):
-                raise Exception(f"Futures prices not loaded for {code} on {settle_date}")
-        else:
-            raise Exception(f"Futures prices not available for {code} on {settle_date}")
-        prices_list = sql.fetch(price_query, PRICES_DB)
-    res: dict[str, float] = {}
-    max_oi = 0
-    for row in prices_list:
-        contract_code, settle_price, oi = row
-        max_oi = max(oi, max_oi)
-        if oi > max_oi * FUT_OI_MIN_MAX:
-            res[contract_code] = settle_price
-    return res
-
-MIN_MAX_VOLUME = 0.001
-# Quotes/ContractsByNumber?productIds=8463&contractsNumber=100&venue=G
-FUT_QUOTES_EP = 'Quotes/Future/{code}/G'
-def load_future_quotes(code: str):
-    price_params = FUT_PROD_TICKS.get(code, None)
-    fut_url = f'{HOME_URL}{FUT_QUOTES_EP}'.format(code=FUT_PRODID_MAP[code])
+FUT_QUOTES_EP = 'quotes/v2/{code}' # 'Quotes/Future/{code}/G'
+def load_future_quotes(series: str):
+    price_params = FUT_PROD_TICKS.get(series, None)
+    fut_url = f'{HOME_URL}{FUT_QUOTES_EP}'.format(code=FUT_PRODID_MAP[series])
     content_json = request_get_retry(fut_url)
     trade_date = dtm.datetime.strptime(content_json["tradeDate"], '%d %b %Y').date()
     quotes = content_json["quotes"]
@@ -272,8 +212,8 @@ def load_future_quotes(code: str):
         if is_valid_price(settle_price):
             settle_price = transform_quote(settle_price, price_params)
             expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
-            contract_month = f"{code}{expiry_code[0]}{expiry_month[2:4]}"
-            if volume > max_volume * MIN_MAX_VOLUME and settle_price > 0:
+            contract_month = f"{series}{expiry_code[0]}{expiry_month[2:4]}"
+            if volume > max_volume * FUT_VOLUME_MIN_MAX and settle_price > 0:
                 res[contract_month] = settle_price
     return (trade_date, res)
 
@@ -283,7 +223,6 @@ SWAP_MAP = {
     'USD_SOFR': "sofrRates",
     'USD_FF_SOFR': "sofrFedFundRates",
 }
-SWAP_RATES_TABLE = 'swap_rates'
 def load_swap_data():
     content_json = request_get_retry(SWAP_URL)
     curves = content_json["resultsCurve"]
@@ -299,19 +238,22 @@ def load_swap_data():
         return sql.modify(insert_query, PRICES_DB)
     return False
 
-def get_swap_data(code: str, date: dtm.date) -> dict[str, float]:
-    rates_query = f"SELECT term, rate FROM {SWAP_RATES_TABLE} "\
-    f"WHERE code='{code}' AND date='{date.strftime(sql.DATE_FORMAT)}'"
-    rates_list = sql.fetch(rates_query, PRICES_DB)
-    if not rates_list:
-        if not load_swap_data():
-            raise Exception(f"Swap data not loaded for {code}")
-        rates_list = sql.fetch(rates_query, PRICES_DB)
-    return dict(rates_list)
-
 OPT_PRODID_MAP = {
     'SR3': 8849,
 }
+OPT_META_DATA_EP = 'Settlements/Options/TradeDateAndExpirations/{code}'
+def load_option_meta_data(series: str) -> list[dtm.date]:
+    opt_settle_dates_url = f'{HOME_URL}{OPT_META_DATA_EP}'.format(code=FUT_PRODID_MAP[series])
+    content_json = request_get_retry(opt_settle_dates_url)
+    res = {}
+    for row in content_json:
+        expirations = row['expirations']
+        for e_r in expirations:
+            trade_dates = e_r['tradeDates']
+            contract_id = e_r['contractId']
+            res[contract_id] = [dtm.datetime.strptime(t_d['formatedDate'], DATE_FORMAT).date() for t_d in trade_dates]
+    return res
+
 OPT_SETTLE_EP = 'Settlements/Options/Settlements/{code}/OOF'
 OPT_PROD_TICKS = {
     'ZT': {'tick_count': 64, 'extra_tick_count': 2},
@@ -319,20 +261,26 @@ OPT_PROD_TICKS = {
     'ZN': {'tick_count': 64},
     'ZB': {'tick_count': 64},
 }
-OPT_OI_MIN_MAX = 0.01
-def get_option_settle_prices(series: str, contract_codes: list[str], date: dtm.date):
+def get_option_settle_prices(series: str, settle_date: dtm.date):
     opt_settle_url = f'{HOME_URL}{OPT_SETTLE_EP}'.format(code=FUT_PRODID_MAP[series])
-    url_params = {'tradeDate': date.strftime(DATE_FORMAT)}
+    url_params = {'tradeDate': settle_date.strftime(DATE_FORMAT)}
     price_params = OPT_PROD_TICKS.get(series, None)
+    opt_meta_data = load_option_meta_data(series)
     # insert_rows = []
     res: dict[str, dict[float, dict[str, tuple[float, float]]]] = {}
     max_oi = 0
-    for contract_code in contract_codes:
+    for contract_id, trade_dates in opt_meta_data.items():
+        if settle_date < trade_dates[-1]:
+            raise Exception(f"Option prices not available for {series} on {settle_date}")
+        elif settle_date > trade_dates[0]:
+            continue # most probably an expired contract
         contract_res = {}
         if series in FUT_PRODCODE_MAP:
-            product_code = contract_code.replace(series, FUT_PRODCODE_MAP[series], 1)
+            product_code = contract_id.replace(series, FUT_PRODCODE_MAP[series], 1)
+        elif contract_id.startswith(series):
+            product_code = contract_id
         else:
-            product_code = contract_code
+            continue
         url_params.update({'monthYear': product_code})
         content_json = request_get_retry(opt_settle_url, params=url_params)
         settlements = content_json["settlements"]
@@ -351,7 +299,7 @@ def get_option_settle_prices(series: str, contract_codes: list[str], date: dtm.d
                     contract_res[strike][OptionDataFlag.CALL] = (settle_price, volume)
                 elif opt_t == 'Put':
                     contract_res[strike][OptionDataFlag.PUT] = (settle_price, volume)
-        res[contract_code] = contract_res
+        res[contract_id] = contract_res
     #             insert_rows.append("\n("\
     # f"('{contract_code}', {strike}, '{opt_t}', '{date.strftime(sql.DATE_FORMAT)}', {settle_price}, {volume}, {oi})")
     return res
@@ -360,17 +308,22 @@ def get_option_settle_prices(series: str, contract_codes: list[str], date: dtm.d
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CME data scraper')
     parser.add_argument('--rate_futures', default='SR1')
-    parser.add_argument('--bond_futures', default='')
+    parser.add_argument('--bond_futures', default='') # ZT,ZF,ZN,TN,ZB,UB
+    parser.add_argument('--options', default='')
     args = parser.parse_args()
     logger.error(args)
-    if args.rate_futures:
-        for code in args.rate_futures.split(','):
+    for code in args.rate_futures.split(','):
+        code = code.strip()
+        if code:
             update_futures_list(code)
-    if args.bond_futures:
-        for code in args.bond_futures.split(','):
+    for code in args.bond_futures.split(','):
+        code = code.strip()
+        if code:
             update_bond_futures_list(code)
-    # for fut in BOND_OPT_PRODS:
-    #     update_options_list(fut)
+    for code in args.options.split(','):
+        code = code.strip()
+        if code:
+            update_options_list(code)
 
 # create_query = f"""CREATE TABLE {FUT_TABLE} (
 #     future_code TEXT, underlier_code TEXT,

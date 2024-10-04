@@ -1,15 +1,20 @@
 import dash
-from dash import html, dcc
-from dash import callback, Output, Input
+from dash import html, dcc, callback, Output, Input
 import dash_ag_grid as dag
 import datetime as dtm
 
+from common.app import style
 from volatility.lib import plotter as vol_plotter
 from volatility.models.vol_types import VolatilityModelType
-from pages import config
 import main
 
 dash.register_page(__name__)
+
+DIV_STYLE = style.get_div_style()
+DROPDOWN_STYLE = style.get_dropdown_style()
+FORM_STYLE = style.get_form_style()
+GRAPH_STYLE = style.get_graph_style()
+GRID_STYLE = style.get_grid_style()
 
 layout = html.Div([
     dcc.Tabs(children=[
@@ -18,28 +23,28 @@ layout = html.Div([
                 dcc.DatePickerSingle(id='val-date-picker'),
                 html.Div([
                     dcc.Dropdown([vst.value for vst in VolatilityModelType], id='model-type-dropdown-1')
-                ], style=config.DROPDOWN_STYLE),
+                ], style=DROPDOWN_STYLE),
                 html.Button('Load Option Surfaces', id='load_options'),
-            ], style=config.FORM_STYLE),
+            ], style=FORM_STYLE),
             dcc.Loading(
                 id='option-surfaces-status',
                 type='default',
             ),
             html.Div(id='option-surfaces'),
-        ], style=config.DIV_STYLE), label='Listed Options'),
+        ], style=DIV_STYLE), label='Listed Options'),
         dcc.Tab(children=html.Div([
             html.Div([
                 html.Div([
                     dcc.Dropdown([vst.value for vst in VolatilityModelType], id='model-type-dropdown-2')
-                ], style=config.DROPDOWN_STYLE),
+                ], style=DROPDOWN_STYLE),
                 html.Button('Load Vol Surfaces', id='load_vols'),
-            ], style=config.FORM_STYLE),
+            ], style=FORM_STYLE),
             dcc.Loading(
                 id='vol-surfaces-status',
                 type='default',
             ),
             html.Div(id='vol-surfaces'),
-        ], style=config.DIV_STYLE), label='FX'),
+        ], style=DIV_STYLE), label='FX'),
     ]),
 ])
 
@@ -56,16 +61,20 @@ def load_options(val_date_str: str, model_type: str, *_):
         val_date = dtm.date.fromisoformat(val_date_str) if val_date_str else None
         v_tabvals = []
         for vsm in main.evaluate_option_surfaces(val_date):
-            vs = vsm.build(model_type, beta=0)
-            fig = vol_plotter.get_vol_surface_figure(*vsm.get_vols_graph(vs))
-            rows, colnames = vsm.get_calibration_summary(vs)
+            try:
+                vs = vsm.build(model_type)
+                fig = vol_plotter.get_vol_surface_figure(*vsm.get_vols_graph(vs))
+                rows, colnames = vsm.get_calibration_summary(vs)
+            except Exception as ex:
+                print(f'Exception: {ex}')
+                continue
             columns = [dict(field=col) for col in colnames]
             records = [dict(zip(colnames, row)) for row in rows]
             v_tabvals.append(dcc.Tab(children=[
-                dcc.Graph(figure=fig, style=config.GRAPH_STYLE),
+                dcc.Graph(figure=fig, style=GRAPH_STYLE),
                 dag.AgGrid(
                     rowData=records, columnDefs=columns,
-                    **config.AGGRID_KWARGS
+                    **GRID_STYLE
                 ),
             ], label=vsm.name))
         return dcc.Tabs(children=v_tabvals), None
@@ -89,13 +98,13 @@ def load_vols(model_type: str, *_):
             columns = [dict(field=col) for col in colnames]
             for col in columns:
                 if col['field'] in ('Quote', 'Error'):
-                    col.update(dict(valueFormatter=config.get_grid_format(',.3%')))
+                    col.update(dict(valueFormatter=style.get_grid_number_format(',.3%')))
             records = [dict(zip(colnames, row)) for row in rows]
             v_tabvals.append(dcc.Tab(children=[
-                dcc.Graph(figure=fig, style=config.GRAPH_STYLE),
+                dcc.Graph(figure=fig, style=GRAPH_STYLE),
                 dag.AgGrid(
                     rowData=records, columnDefs=columns,
-                    **config.AGGRID_KWARGS
+                    **GRID_STYLE
                 ),
             ], label=vsm.name))
         return dcc.Tabs(children=v_tabvals), None

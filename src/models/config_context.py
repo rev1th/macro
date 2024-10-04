@@ -1,18 +1,20 @@
 import datetime as dtm
-from instruments.bond import ZeroCouponBond
 from instruments.bond_future import BondFuture
-from instruments.coupon_bond import FixCouponBond
-from instruments.rate_future import RateFutureC
+from instruments.bond.coupon_bond import FixCouponBond
+from instruments.bond.inflation_bond import InflationIndexBond
+from instruments.bond.zero_bond import ZeroCouponBond
+from instruments.rate_future import RateFuture
 from instruments.swap_convention import SwapConvention
 
 
 class ConfigContext(object):
     _meeting_nodes: dict[str, list[dtm.date]] = {}
     _swap_conventions: dict[str, SwapConvention] = {}
-    _rate_futures: dict[str, list[RateFutureC]] = {}
+    _rate_futures: dict[str, list[RateFuture]] = {}
     _zero_bonds: dict[str, list[ZeroCouponBond]] = {}
     _coupon_bonds: dict[str, list[FixCouponBond]] = {}
     _bond_futures: dict[str, list[BondFuture]] = {}
+    _inflation_bonds: dict[str, list[InflationIndexBond]] = {}
     
     def __new__(cls):
         if not hasattr(cls, 'instance'):
@@ -31,7 +33,7 @@ class ConfigContext(object):
     def get_swap_convention(self, name: str):
         return self._swap_conventions[name]
     
-    def add_futures(self, name: str, futures: list[RateFutureC]) -> None:
+    def add_futures(self, name: str, futures: list[RateFuture]) -> None:
         self._rate_futures[name] = futures
     
     def get_futures(self, name: str):
@@ -51,6 +53,15 @@ class ConfigContext(object):
     
     def get_coupon_bonds(self, name: str):
         return self._coupon_bonds[name]
+    
+    def add_inflation_bonds(self, name: str, bonds: list[InflationIndexBond]) -> None:
+        self._inflation_bonds[name] = bonds
+    
+    def has_inflation_bonds(self, name: str) -> bool:
+        return name in self._inflation_bonds
+    
+    def get_inflation_bonds(self, name: str):
+        return self._inflation_bonds[name]
     
     def get_bonds(self, name: str):
         return self._zero_bonds[name] + self._coupon_bonds[name]

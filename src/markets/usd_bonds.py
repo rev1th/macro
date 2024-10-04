@@ -2,15 +2,16 @@ import logging
 import datetime as dtm
 
 from common.chrono import Tenor
+from data_api import treasury_client as tsy_client
+from data_api.treasury_config import SERIES_ID
 from markets import usd_lib
-import data_api.treasury as td_api
 from models.bond_curve_model import BondCurveModelNS, BondCurveModelNP
 from models.bond_curve_types import BondCurveWeightType
-from models.context import ConfigContext
+from models.config_context import ConfigContext
+from models.data_context import DataContext
 
 logger = logging.Logger(__name__)
 
-CODE = 'UST'
 MIN_TENOR = Tenor('1m')
 # CUSIP_COL, TYPE_COL, RATE_COL, MATURITY_COL, BUY_COL, SELL_COL, CLOSE_COL = (
 #     td_api.COL_NAMES[id] for id in [0, 1, 2, 3, -3, -2, -1])
@@ -18,25 +19,27 @@ MIN_TENOR = Tenor('1m')
 def construct(value_date: dtm.date = None, weight_type = BondCurveWeightType.OTR):
     if not value_date:
         value_date = usd_lib.get_last_valuation_date()
-    if not ConfigContext().has_zero_bonds(CODE):
-        ConfigContext().add_zero_bonds(CODE, td_api.get_zero_bonds(value_date))
-    if not ConfigContext().has_coupon_bonds(CODE):
-        ConfigContext().add_coupon_bonds(CODE, td_api.get_coupon_bonds(value_date))
-    bonds_map = {b.name: b for b in ConfigContext().get_bonds(CODE)}
+    if not ConfigContext().has_zero_bonds(SERIES_ID):
+        ConfigContext().add_zero_bonds(SERIES_ID, tsy_client.get_zero_bonds(value_date))
+    if not ConfigContext().has_coupon_bonds(SERIES_ID):
+        ConfigContext().add_coupon_bonds(SERIES_ID, tsy_client.get_coupon_bonds(value_date))
+    if not ConfigContext().has_inflation_bonds(SERIES_ID):
+        ConfigContext().add_inflation_bonds(SERIES_ID, tsy_client.get_inflation_bonds(value_date))
+        DataContext().add_inflation_series(tsy_client.INFLATION_ID, tsy_client.get_inflation_index(tsy_client.INFLATION_ID))
+    bonds_map = {b.name: b for b in ConfigContext().get_bonds(SERIES_ID)}
+    infl_bonds_map = {b.name: b for b in ConfigContext().get_inflation_bonds(SERIES_ID)}
     min_maturity = MIN_TENOR.get_date(value_date)
-    bonds_price = td_api.get_bonds_price(value_date)
-    # settle_delay = Tenor.bday(1, usd_lib.CALENDAR)
-    # if sum(bonds_price[CLOSE_COL]) == 0:
-    #     settle_date = value_date
-    # else:
-    #     settle_date = settle_delay.get_date(value_date)
+    bonds_price = tsy_client.get_bonds_price(value_date)
     bonds_list = []
-    # bills_list = []
+    infl_bonds_list = []
     for cusip, (price, spread) in bonds_price.items():
-        if cusip not in bonds_map:
-            logger.error(f'{cusip} is missing from bond reference data')
+        if cusip in bonds_map:
+            bond_obj = bonds_map[cusip]
+        elif cusip in infl_bonds_map:
+            bond_obj = infl_bonds_map[cusip]
+        else:
+            logger.info(f'{cusip} is missing from bond reference data')
             continue
-        bond_obj = bonds_map[cusip]
         if bond_obj.maturity_date < min_maturity:
             continue
     # for _, b_r in bonds_price.iterrows():
@@ -63,11 +66,17 @@ def construct(value_date: dtm.date = None, weight_type = BondCurveWeightType.OTR
             else:
                 weight = 0
         bond_obj.set_data(value_date, price)
-        bonds_list.append((bond_obj, weight))
+        if cusip in infl_bonds_map:
+            infl_bonds_list.append((bond_obj, weight if weight else 1))
+        else:
+            bonds_list.append((bond_obj, weight))
     match weight_type:
         case BondCurveWeightType.OTR | None:
             tenors = None
         case _:
             tenors = ['6M'] + [f'{t}y' for t in [1, 2, 3, 5, 7, 10, 12, 15, 20, 25, 30]]
-    return BondCurveModelNP(value_date, 'USD-SOFR', bonds_list, tenors, name=CODE)
+    return [
+        BondCurveModelNP(value_date, 'USD-SOFR', bonds_list, tenors, name=f'{SERIES_ID}B'),
+        BondCurveModelNP(value_date, 'USD-SOFR', infl_bonds_list, tenors, name=f'{SERIES_ID}IB'),
+    ]
     # return BondCurveModelNS(value_date, 'USD-SOFR', bonds, _decay_rate=1/12)

@@ -7,10 +7,9 @@ import datetime as dtm
 from common.chrono.tenor import Tenor
 from common.models.base_instrument import BaseInstrument
 from instruments.swap_convention import SwapConvention
-from instruments.rate_curve_instrument import CurveInstrument
 from instruments.rate_curve import RateCurve
 from instruments.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
-from models.context import ConfigContext
+from models.config_context import ConfigContext
 
 @dataclass
 class SwapTemplate(BaseInstrument):
@@ -29,7 +28,7 @@ class SwapTemplate(BaseInstrument):
         swap_class = BasisSwap if convention.is_basis() else DomesticSwap
         start_date = self._start.get_date(convention.spot_delay().get_date(trade_date))
         end_date = self._end.get_date(start_date)
-        return swap_class(end_date, convention, start_date, end_date, name=self.name)
+        return swap_class(convention, start_date, end_date, name=self.name)
 
 @dataclass
 class SwapTrade(BaseInstrument):
@@ -68,22 +67,16 @@ class SwapTrade(BaseInstrument):
     def get_pv01(self, _: RateCurve) -> float:
         """Get PV01 for Swap"""
 
-@dataclass
-class SwapBaseC(SwapTrade, CurveInstrument):
-    
-    def __post_init__(self):
-        self._end = self._end_date
-
 # Single currency Fix vs Float
 @dataclass
-class DomesticSwap(SwapBaseC):
+class DomesticSwap(SwapTrade):
     _fix_leg_id: int = 1
     _units: float = 1/100  # standard in %
     
     def __post_init__(self):
         assert self._fix_leg_id in (1, 2), f"Invalid fix leg specified {self._fix_leg_id}"
-        self._leg1 = SwapFixLeg(self.convention.leg1, self._start_date, self._end_date, self.notional)
-        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start_date, self._end_date, -self.notional)
+        self._leg1 = SwapFixLeg(self.convention.leg1, self._start_date, self._end_date, self._notional)
+        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start_date, self._end_date, -self._notional)
     
     @property
     def fix_leg(self) -> SwapFixLeg:
@@ -118,15 +111,16 @@ class DomesticSwap(SwapBaseC):
 
 # Single currency Float vs Float
 @dataclass
-class BasisSwap(SwapBaseC):
+class BasisSwap(SwapTrade):
     _spread_leg_id: int = 2
     _units: float = 1/10000  # standard in bps
 
     def __post_init__(self):
-        super().__post_init__()
         assert self._spread_leg_id in (1, 2), f"Invalid spread leg specified {self._spread_leg_id}"
-        self._leg1 = SwapFloatLeg(self.convention.leg1, self._start_date, self._end_date, self.notional, _units=self._units)
-        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start_date, self._end_date, -self.notional, _units=self._units)
+        self._leg1 = SwapFloatLeg(self.convention.leg1, self._start_date, self._end_date, 
+                                  self._notional, _units=self._units)
+        self._leg2 = SwapFloatLeg(self.convention.leg2, self._start_date, self._end_date, 
+                                  -self._notional, _units=self._units)
     
     @property
     def spread_leg(self) -> SwapFloatLeg:

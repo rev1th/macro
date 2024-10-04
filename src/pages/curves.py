@@ -1,16 +1,21 @@
 import dash
-from dash import html, dcc
-from dash import callback, Output, Input, Patch, State
+from dash import html, dcc, callback, Output, Input, Patch, State
 import dash_ag_grid as dag
 import datetime as dtm
 import pandas as pd
 
+from common.app import style
 from lib import plotter
 from models.bond_curve_types import BondCurveWeightType
 import main
-from pages.config import *
 
 dash.register_page(__name__, path='/')
+
+DIV_STYLE = style.get_div_style()
+DROPDOWN_STYLE = style.get_dropdown_style()
+FORM_STYLE = style.get_form_style()
+GRAPH_STYLE = style.get_graph_style()
+GRID_STYLE = style.get_grid_style()
 
 layout = html.Div([
     html.Div([
@@ -89,7 +94,7 @@ def load_rates_curves(start_date_str: str, end_date_str: str, ccys: list[str], *
             nodes_columns = [dict(field=col) for col in nodes_df.columns]
             for col in nodes_columns:
                 if col['field'] in ('Rate', 'Change'):
-                    col.update(dict(valueFormatter=get_grid_format(',.4%')))
+                    col.update(dict(valueFormatter=style.get_grid_number_format(',.4%')))
             calibration_df = pd.concat([ycg.get_calibration_summary() for ycg in ycg_arr])
             calibration_columns = [dict(field=col) for col in calibration_df.columns]
             r_tabvals.append(dcc.Tab(children=[
@@ -97,11 +102,11 @@ def load_rates_curves(start_date_str: str, end_date_str: str, ccys: list[str], *
                 dcc.Graph(figure=fig, style=GRAPH_STYLE),
                 dag.AgGrid(
                     rowData=nodes_df.to_dict('records'), columnDefs=nodes_columns,
-                    **AGGRID_KWARGS
+                    **GRID_STYLE
                 ),
                 dag.AgGrid(
                     rowData=calibration_df.to_dict('records'), columnDefs=calibration_columns,
-                    **AGGRID_KWARGS
+                    **GRID_STYLE
                 ),
             ], label=ycg.name))
         return dcc.Tabs(children=r_tabvals), None
@@ -143,7 +148,7 @@ def load_bonds_curves(start_date_str: str, end_date_str: str, weight_type: str, 
                     id='bonds-pricer-status',
                     type='default',
                 ),
-                # html.Div(id='bonds-pricer'),
+                html.Div(id='bonds-pricer'),
             ], label=bcm.name))
         return dcc.Tabs(children=b_tabvals), None
     except Exception as ex:
@@ -164,12 +169,12 @@ def recalc_bonds(trade_date_str: str, curve_date_str: str):
         columns = [dict(field=col) for col in measures_df.columns]
         for col in columns:
             if col['field'] == 'Yield':
-                col.update(dict(valueFormatter=get_grid_format(',.3%')))
-            elif col['field'].endswith('Price'):
-                col.update(dict(valueFormatter=get_grid_format(',.6f')))
+                col.update(dict(valueFormatter=style.get_grid_number_format(',.3%')))
+            elif col['field'].endswith('Price') or col['field'] in ('DV01', 'Duration'):
+                col.update(dict(valueFormatter=style.get_grid_number_format(',.6f')))
         patched_table = dag.AgGrid(
             rowData=measures_df.to_dict('records'), columnDefs=columns,
-            **AGGRID_KWARGS
+            **GRID_STYLE
         )
         return patched_table, None
     except Exception as ex:
@@ -192,10 +197,10 @@ def load_bond_futures(start_date_str: str, end_date_str: str, *_):
         columns = [dict(field=col) for col in measures_df.columns]
         for col in columns:
             if 'Repo' in col['field']:
-                col.update(dict(valueFormatter=get_grid_format(',.3%')))
+                col.update(dict(valueFormatter=style.get_grid_number_format(',.3%')))
         table = dag.AgGrid(
             rowData=measures_df.to_dict('records'), columnDefs=columns,
-            **AGGRID_KWARGS
+            **GRID_STYLE
         )
         return table, None
     except Exception as ex:

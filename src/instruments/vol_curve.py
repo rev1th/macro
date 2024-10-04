@@ -3,14 +3,11 @@ from pydantic.dataclasses import dataclass
 from dataclasses import InitVar
 from typing import ClassVar
 import datetime as dtm
-import logging
 
 from common.base_class import NameDateClass
 
 from lib.interpolator import Interpolator
 from instruments.base_types import DataPoint
-
-logger = logging.Logger(__name__)
 
 
 @dataclass

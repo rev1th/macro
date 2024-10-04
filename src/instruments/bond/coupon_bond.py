@@ -7,7 +7,7 @@ from common.chrono import Frequency, BDayAdjust, BDayAdjustType
 from common.chrono.daycount import DayCount
 from common.chrono.roll import RollConvention, RollConventionType
 from common.numeric import solver
-from instruments.bond import Bond, BondSettleInfo, BondYieldParameters, CashFlow, FACE_VALUE
+from instruments.bond.bond import Bond, BondSettleInfo, BondYieldParameters, CashFlow, FACE_VALUE
 from instruments.rate_curve import RateCurve
 
 @dataclass(frozen=True)

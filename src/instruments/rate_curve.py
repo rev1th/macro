@@ -4,7 +4,6 @@ from dataclasses import InitVar, field
 from typing import ClassVar, Union, Optional
 import datetime as dtm
 import bisect
-import logging
 import numpy as np
 
 from common.chrono import get_bdate_series, Compounding
@@ -14,8 +13,6 @@ from common.base_class import NameDateClass
 
 from lib.interpolator import Interpolator
 from instruments.base_types import DataPoint
-
-logger = logging.Logger(__name__)
 
 
 # https://stackoverflow.com/questions/53990296/how-do-i-make-a-python-dataclass-inherit-hash

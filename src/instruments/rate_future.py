@@ -6,7 +6,6 @@ import datetime as dtm
 import numpy as np
 
 from common.models.future import Future
-from instruments.rate_curve_instrument import CurveInstrument
 from common.chrono.tenor import Tenor, get_bdate_series
 from common.chrono.daycount import DayCount
 from instruments.rate_curve import RateCurve
@@ -43,34 +42,25 @@ class RateFuture(Future):
         convex_unit = vol * vol / 2 * beta_rs_re * dcf_v_s * (dcf_v_s - dcf_rs_re)
         self._convexity = (100 - self.data[date] + 100 / dcf_rs_re) * (1 - np.exp(-convex_unit))
 
-@dataclass
-class RateFutureC(RateFuture, CurveInstrument):
-    _end: dtm.date = field(init=False)
-
-    def __post_init__(self):
-        self._end = self.expiry
-    
     def get_pv(self, curve: RateCurve) -> float:
         settle_rate = self.get_settle_rate(curve.date, curve)
         price = self.data[curve.date]
-        return self.notional * (1 - settle_rate - (price + self._convexity) / 100)
+        return (1 - settle_rate - (price + self._convexity) / 100)
 
 @dataclass
-class RateFutureCompound(RateFutureC):
+class RateFutureCompound(RateFuture):
 
     def __post_init__(self):
-        super().__post_init__()
         self._rate_end_date = self.settle_date
     
     def get_settle_rate(self, _: dtm.date, curve: RateCurve) -> float:
         return get_forecast_rate(self._rate_start_date, self._rate_end_date, curve, self.underlying)
 
 @dataclass
-class RateFutureAverage(RateFutureC):
+class RateFutureAverage(RateFuture):
     _rate_start_date: dtm.date = field(init=False)
 
     def __post_init__(self):
-        super().__post_init__()
         # first day of the expiry month
         self._rate_start_date = dtm.date(self.expiry.year, self.expiry.month, 1)
         # first day of next expiry month

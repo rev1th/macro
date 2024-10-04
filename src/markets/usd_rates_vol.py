@@ -4,19 +4,19 @@ from common.models.data import OptionDataFlag
 from volatility.instruments.option import CallOption, PutOption
 from volatility.models.listed_options_construct import ListedOptionsConstruct, ModelStrikeSlice, ModelStrikeLine
 
-import data_api.cme as cme_api
+from data_api import cme_client
 from markets import usd_lib
-from models.context import ConfigContext
+from models.config_context import ConfigContext
 from models.curve_context import CurveContext
 from instruments.rate_curve import RateCurve
 
 def get_model(series: str, value_date: dtm.date, discount_curve: RateCurve):
     futures_map = {fut.name: fut for fut in ConfigContext().get_futures(series) if fut.expiry > value_date}
-    option_contracts = cme_api.get_options_contracts(series)
-    options_active = [row for row in option_contracts if row[2] > value_date]
-    options_data = cme_api.get_option_settle_prices(series, [r[0] for r in options_active], value_date)
+    option_contracts = cme_client.get_options_contracts(series)
+    option_contracts_active = [row for row in option_contracts if row[2] > value_date]
+    options_data = cme_client.get_option_settle_prices(series, value_date)
     option_matrix = []
-    for opt_contract_code, fut_contract_code, expiry in options_active:
+    for opt_contract_code, fut_contract_code, expiry in option_contracts_active:
         if opt_contract_code not in options_data:
             continue
         future = futures_map[fut_contract_code]
