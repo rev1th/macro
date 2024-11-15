@@ -26,7 +26,7 @@ def get_contracts(code: str, value_date) -> list[BondFuture]:
 
 CODE = 'UST'
 def construct(value_date = None):
-    last_value_date = usd_lib.get_last_valuation_date()
+    last_value_date = usd_lib.get_last_trade_date()
     if not value_date:
         value_date = last_value_date
     if not ConfigContext().has_coupon_bonds(CODE):

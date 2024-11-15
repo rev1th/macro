@@ -17,12 +17,7 @@ class RateFixing(BaseInstrument):
         try:
             return self.data[date]
         except KeyError:
-            if date > self.data.get_last_point()[0]:
-                return self.get_last_value()
-            elif date < self.data.get_first_point()[0]:
-                raise Exception(f"{date} is before the first available point {self.data.get_first_point()[0]}")
-            else:
-                return self.data.get_latest_value(date)
+            return self.data.get_latest_value(date)
     
     def get_last_value(self) -> float:
         return self.data.get_last_point()[1]
@@ -32,13 +27,15 @@ class RateFixing(BaseInstrument):
 class InflationIndex(BaseInstrument):
 
     def get(self, date: dtm.date):
-        next_id = self.data.bisect_left(date)
-        next_date, next_value = self.data.peekitem(next_id)
-        if next_date == date:
-            return next_value
-        elif next_id == 0:
-            raise Exception(f"{date} is before the first available point {self.data.get_first_point()[0]}")
+        next_id = self.data.bisect_right(date)
+        # assert(next_id > 0, f"{date} is before the first available point {self.data.get_first_point()[0]}")
         last_date, last_value = self.data.peekitem(next_id-1)
+        if last_date == date:
+            return last_value
+        try:
+            next_date, next_value = self.data.peekitem(next_id)
+        except IndexError:
+            raise IndexError(f"{date} is after the last available point {self.data.get_last_point()[0]}")
         slope = (next_value - last_value) / (next_date - last_date).days
         return last_value + slope * (date - last_date).days
 

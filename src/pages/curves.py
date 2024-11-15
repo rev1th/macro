@@ -3,11 +3,14 @@ from dash import html, dcc, callback, Output, Input, Patch, State
 import dash_ag_grid as dag
 import datetime as dtm
 import pandas as pd
+import logging
 
 from common.app import style
 from lib import plotter
 from models.bond_curve_types import BondCurveWeightType
 import main
+
+logger = logging.Logger(__name__)
 
 dash.register_page(__name__, path='/')
 
@@ -111,7 +114,8 @@ def load_rates_curves(start_date_str: str, end_date_str: str, ccys: list[str], *
             ], label=ycg.name))
         return dcc.Tabs(children=r_tabvals), None
     except Exception as ex:
-        return None, ex
+        logger.critical(f'Rates Curves loading failed: {ex}')
+        return None, None
 
 @callback(
     Output(component_id='bonds-curves', component_property='children'),
@@ -152,7 +156,8 @@ def load_bonds_curves(start_date_str: str, end_date_str: str, weight_type: str, 
             ], label=bcm.name))
         return dcc.Tabs(children=b_tabvals), None
     except Exception as ex:
-        return None, ex
+        logger.critical(f'Bonds Curves loading failed: {ex}')
+        return None, None
 
 @callback(
     Output(component_id='bonds-pricer', component_property='children'),
@@ -176,9 +181,9 @@ def recalc_bonds(trade_date_str: str, curve_date_str: str):
             rowData=measures_df.to_dict('records'), columnDefs=columns,
             **GRID_STYLE
         )
-        return patched_table, None
     except Exception as ex:
-        return patched_table, ex
+        logger.error(ex)
+    return patched_table, None
 
 @callback(
     Output(component_id='bond-futures', component_property='children'),
@@ -204,4 +209,5 @@ def load_bond_futures(start_date_str: str, end_date_str: str, *_):
         )
         return table, None
     except Exception as ex:
-        return None, ex
+        logger.critical(f'Bond Futures analytics loading failed: {ex}')
+        return None, None

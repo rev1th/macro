@@ -21,7 +21,7 @@ CVXADJ_RATE_TOLERANCE = 0.2e-4
 @dataclass
 class CurveInstrument:
     _underlier: BaseInstrument
-    _knot: dtm.date = None
+    _node: dtm.date = None
     _notional: float = field(kw_only=True, default=1000000)
     exclude_fit: bool = field(kw_only=True, default=False)
     _end: ClassVar[dtm.date]
@@ -32,11 +32,11 @@ class CurveInstrument:
         elif isinstance(self._underlier, SwapTrade):
             self._end = self._underlier.end_date
         elif isinstance(self._underlier, FXSwap):
-            self._end = self._underlier.far_leg_settle_date
+            self._end = self._underlier.far_settle_date
         elif isinstance(self._underlier, Deposit):
             self._end = self._underlier._end
-        if not self._knot:
-            self._knot = self._end
+        if not self._node:
+            self._node = self._end
     
     @property
     def underlier(self):
@@ -55,14 +55,14 @@ class CurveInstrument:
         return self._end
     
     @property
-    def knot(self):
-        return self._knot
+    def node(self):
+        return self._node
     
-    def set_knot(self, value: dtm.date):
-        self._knot = value
+    def set_node(self, value: dtm.date):
+        self._node = value
     
     def __lt__(self, other) -> bool:
-        return self._knot < other._knot
+        return self._node < other._node
     
     def get_pv(self, curve: RateCurve, collateral_curve: RateCurve = None, collateral_spot=None) -> float:
         underlier = self._underlier
@@ -93,18 +93,18 @@ class CurveInstrument:
             fut_implied_par = swap_inst.get_par(leg1_forward_curve=curve,
                                                 leg2_forward_curve=collateral_curve)
             sw_crv_diff = fut_implied_par - swap_inst.spread(curve.date)
-        logger.critical(f"{swap_inst.name} Implied Rate={fut_implied_par/swap_inst._units},"\
+        logger.warning(f"{swap_inst.name} Implied Rate={fut_implied_par/swap_inst._units},"\
                         f"Market Rate={swap_inst.data[curve.date]}")
         if abs(sw_crv_diff) > CVXADJ_RATE_TOLERANCE:
-            sw_dcf_1 = curve.get_dcf(curve.date, node_date)
-            sw_dcf_2 = curve.get_dcf(curve.date, swap_inst.end_date)
+            sw_dcf_1 = curve.get_dcf(node_date)
+            sw_dcf_2 = curve.get_dcf(swap_inst.end_date)
             pv01_unit = abs(swap_inst.get_pv01(curve) * 10000 / self._notional)
             var_offset = np.log(1 + sw_crv_diff * pv01_unit / curve.get_df(swap_inst.end_date)) *\
                             12 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
             # var_offset = sw_crv_diff * 12 * sw_dcf_2 / (2*sw_dcf_2**3 - 3*sw_dcf_1*sw_dcf_2**2 + sw_dcf_1**3)
             var_adjusted = np.square(node_vol) + var_offset
             vol_adjusted = np.sqrt(var_adjusted) if var_adjusted > 0 else 0
-            logger.critical(f'Rate Vol Adjusted for {swap_inst.end_date} is {vol_adjusted}')
+            logger.warning(f'Rate Vol Adjusted for {swap_inst.end_date} is {vol_adjusted}')
             if node_vol != vol_adjusted:
                 return vol_adjusted
         return None
@@ -126,7 +126,7 @@ class Deposit(BaseInstrument):
     def get_pv(self, curve: RateCurve) -> float:
         start_date = self.start_date(curve.date)
         fcast_rate = curve.get_forward_rate(start_date, self._end)
-        period_dcf = curve.get_dcf(start_date, self._end)
+        period_dcf = curve.get_dcf_from(start_date, self._end)
         fcast_rate *= period_dcf
         fixed_rate = np.exp(self.data[curve.date] * period_dcf) - 1
         return (fcast_rate - fixed_rate)

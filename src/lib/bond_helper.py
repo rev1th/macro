@@ -10,7 +10,7 @@ from models.curve_context import CurveContext
 def get_analytics(curve_date: dtm.date, trade_date: dtm.date = None) -> pd.DataFrame:
     measures = []
     if not curve_date:
-        curve_date = usd_lib.get_last_valuation_date()
+        curve_date = usd_lib.get_last_trade_date()
     bond_curve = CurveContext().get_bond_curve(f'{SERIES_ID}B', curve_date)
     if trade_date:
         price_date = trade_date

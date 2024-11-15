@@ -1,6 +1,6 @@
 import datetime as dtm
 
-from common.models.data import OptionDataFlag
+from common.models.market_data import OptionDataFlag
 from volatility.instruments.option import CallOption, PutOption
 from volatility.models.listed_options_construct import ListedOptionsConstruct, ModelStrikeSlice, ModelStrikeLine
 
@@ -14,7 +14,7 @@ BOND_OPT_PRODS = ('ZT', 'ZF', 'ZN', 'ZB')
 
 def get_model(series: str, value_date: dtm.date, discount_curve: RateCurve):
     if not ConfigContext().has_bond_futures(series):
-        raise Exception(f'Futures not loaded for {series}')
+        raise RuntimeError(f'Futures not loaded for {series}')
     futures_map = {fut.name: fut for fut in ConfigContext().get_bond_futures(series)}
     option_contracts = cme_client.get_options_contracts(series)
     option_contracts_active = [row for row in option_contracts if row[2] > value_date]
@@ -40,6 +40,6 @@ def get_model(series: str, value_date: dtm.date, discount_curve: RateCurve):
 
 def construct(value_date: dtm.date = None):
     if not value_date:
-        value_date = usd_lib.get_last_valuation_date()
+        value_date = usd_lib.get_last_trade_date()
     discount_curve = CurveContext().get_rate_curve('USD-SOFR', value_date)
     return [get_model(code, value_date, discount_curve) for code in BOND_OPT_PRODS]

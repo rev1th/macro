@@ -1,6 +1,6 @@
 import datetime as dtm
 
-from common.models.data import OptionDataFlag
+from common.models.market_data import OptionDataFlag
 from volatility.instruments.option import CallOption, PutOption
 from volatility.models.listed_options_construct import ListedOptionsConstruct, ModelStrikeSlice, ModelStrikeLine
 
@@ -36,6 +36,6 @@ def get_model(series: str, value_date: dtm.date, discount_curve: RateCurve):
 
 def construct(value_date: dtm.date = None):
     if not value_date:
-        value_date = usd_lib.get_last_valuation_date()
+        value_date = usd_lib.get_last_trade_date()
     discount_curve = CurveContext().get_rate_curve('USD-SOFR', value_date)
     return [get_model('SR3', value_date, discount_curve)]

@@ -20,7 +20,9 @@ def load_fx() -> tuple[dtm.date, list[tuple[str, float, dtm.date]]]:
         tenor_dt = dtm.datetime.strptime(tenor_i["valueDate"], DATE_FORMAT).date()
         tenor_points = float(tenor_i["points"])
         res.append((tenor, tenor_points, tenor_dt))
-    return (data_date, res)
+        if tenor == '1M':
+            implied_spot = float(tenor_i['swapAllPrc']) - tenor_points / 10000
+    return (data_date, implied_spot, res)
 
 SPOT_EP = 'fx/ccpr.json'
 def load_spot() -> dict[str, tuple[str, float]]:
@@ -90,9 +92,14 @@ def load_fxvol() -> tuple[dtm.date, dict[str, dict[str, float]]]:
         content_data = content_json["records"]
         for rec in content_data:
             vtype = rec['volatilityType']
+            if vtype == 'ATM':
+                d_key = (vtype, None)
+            else:
+                delta, quote_type = vtype.split(' ')
+                d_key = (int(delta[:-1]) / 100, quote_type)
             tenor = rec['tenor']
             if tenor not in res:
                 res[tenor] = {}
             spread = float(rec['askVolatilityStr']) - float(rec['bidVolatilityStr'])
-            res[tenor][vtype] = float(rec['midVolatilityStr']), spread
+            res[tenor][d_key] = float(rec['midVolatilityStr']), spread
     return data_date, res

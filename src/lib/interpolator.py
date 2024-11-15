@@ -51,7 +51,7 @@ class FlatRate(Interpolator):
     def get_value(self, x: float) -> float:
         super()._get_value(x)
         if x > self._xs[-1]:
-            raise Exception("Out of node bounds for flat rate")
+            raise IndexError("Out of node bounds for flat rate")
         ih = bisect.bisect_left(self._xs, x)
         if x == self._xs[ih]:
             return self._ys[ih]
@@ -118,7 +118,7 @@ class FlatRateBD(Interpolator):
     def get_value(self, x: float) -> float:
         super()._get_value(x)
         if x > self._xs[-1]:
-            raise Exception("Out of node bounds for flat rate")
+            raise IndexError("Out of node bounds for flat rate")
         ih = bisect.bisect_left(self._xs, x)
         if x == self._xs[ih]:
             return self._ys[ih]

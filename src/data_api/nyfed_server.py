@@ -15,7 +15,7 @@ NYFED_TABLE = 'rates_fixings'
 
 def update_fixing(code: str, from_date: dtm.date):
     if code not in NYFED_URL_CODEMAP:
-        raise Exception(f'{code} not found in URL mapping')
+        raise ValueError(f'{code} not found in URL mapping')
     params = {
         'startDt': from_date.strftime(NYFED_URL_DATE_FORMAT),
         'eventCodes': NYFED_URL_CODEMAP[code],
@@ -40,7 +40,7 @@ def update_fixing(code: str, from_date: dtm.date):
 if __name__ == '__main__':
     for code in NYFED_URL_CODEMAP:
         if not update_fixing(code):
-            raise Exception(f'Failed {code}')
+            raise RuntimeError(f'Failed {code}')
 
 # create_query = """CREATE TABLE rates_fixings (
 #     currency TEXT, type TEXT, date TEXT, rate REAL,

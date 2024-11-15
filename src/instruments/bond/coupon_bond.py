@@ -201,6 +201,9 @@ class FixCouponBond(Bond):
                          repo_daycount = DayCount.ACT360) -> float:
         spot_pv = self.price(date) / FACE_VALUE + self.get_accrued(date)
         fwd_pv = forward_price / FACE_VALUE
+        fwd_dcf = repo_daycount.get_dcf(self.settle_date(date), forward_date)
+        if fwd_dcf == 0:
+            return -float('inf')
         realized_cash = 0
         realized_cash_dcf = 0
         for cshf in self.get_cashflows(date):
@@ -210,5 +213,4 @@ class FixCouponBond(Bond):
             else:
                 fwd_pv += self.get_accrued_interest(forward_date, cshf)
                 break
-        return (fwd_pv - spot_pv + realized_cash) / \
-            (spot_pv * repo_daycount.get_dcf(self.settle_date(date), forward_date) - realized_cash_dcf)
+        return (fwd_pv - spot_pv + realized_cash) / (spot_pv * fwd_dcf - realized_cash_dcf)

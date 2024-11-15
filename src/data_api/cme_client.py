@@ -46,9 +46,9 @@ def get_future_settle_prices(code: str, settle_date: dtm.date):
             return server.load_future_quotes(code)[1]
         elif settle_date in fut_data_dates:
             if not server.load_future_settle_prices(code, settle_date):
-                raise Exception(f"Futures prices not loaded for {code} on {settle_date}")
+                raise RuntimeError(f"Futures prices not loaded for {code} on {settle_date}")
         else:
-            raise Exception(f"Futures prices not available for {code} on {settle_date}")
+            raise ValueError(f"Futures prices not available for {code} on {settle_date}")
         prices_list = sql.fetch(price_query, PRICES_DB)
     res: dict[str, float] = {}
     max_oi = 0
@@ -65,8 +65,8 @@ def get_swap_data(code: str, date: dtm.date) -> dict[str, float]:
     f"WHERE code='{code}' AND date='{date.strftime(sql.DATE_FORMAT)}'"
     rates_list = sql.fetch(rates_query, PRICES_DB)
     if not rates_list:
-        if not server.load_swap_data():
-            raise Exception(f"Swap data not loaded for {code}")
+        if not server.load_swap_data(date):
+            raise RuntimeError(f"Swap data not loaded for {code}")
         rates_list = sql.fetch(rates_query, PRICES_DB)
     return dict(rates_list)
 

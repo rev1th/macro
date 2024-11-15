@@ -55,7 +55,7 @@ def get_coupon_bonds(date: dtm.date) -> list[FixCouponBond]:
                                         _original_term=term, _settle_delay=settle_delay, name=row[0]))
     return bonds_list
 
-INFLATION_ID = 'CPIAUNS'
+INFLATION_ID = 'CPIAUCNS'
 def get_inflation_bonds(date: dtm.date) -> list[InflationIndexBond]:
     select_query = "SELECT id, maturity, coupon, original_issue_date, base_index_value "\
     f"FROM {BONDS_REF_TABLE} WHERE type in ('TIPS') AND maturity > '{date.strftime(sql.DATE_FORMAT)}'"

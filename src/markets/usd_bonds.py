@@ -18,7 +18,7 @@ MIN_TENOR = Tenor('1m')
 
 def construct(value_date: dtm.date = None, weight_type = BondCurveWeightType.OTR):
     if not value_date:
-        value_date = usd_lib.get_last_valuation_date()
+        value_date = usd_lib.get_last_trade_date()
     if not ConfigContext().has_zero_bonds(SERIES_ID):
         ConfigContext().add_zero_bonds(SERIES_ID, tsy_client.get_zero_bonds(value_date))
     if not ConfigContext().has_coupon_bonds(SERIES_ID):

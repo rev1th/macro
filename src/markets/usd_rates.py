@@ -13,8 +13,9 @@ from models.data_context import DataContext
 
 logger = logging.Logger(__name__)
 
-
 CONFIG_CONTEXT: ConfigContext = None
+RATE_VOL = 1.4/100
+NUM_STEPS = 8
 
 
 def get_futures_for_curve(value_date: dtm.date, fixing_code: str) -> list[CurveInstrument]:
@@ -36,12 +37,12 @@ def get_futures_for_curve(value_date: dtm.date, fixing_code: str) -> list[CurveI
     instruments_crv.sort()
     return instruments_crv
 
-def get_swaps_curve(val_date: dtm.date, code: str, cutoff: dtm.date = None) -> list[CurveInstrument]:
-    swap_prices = cme_client.get_swap_data(code, val_date)
+def get_swaps_curve(date: dtm.date, code: str, cutoff: dtm.date = None) -> list[CurveInstrument]:
+    swap_prices = cme_client.get_swap_data(code, date)
     swap_instruments = []
     for tenor, rate in swap_prices.items():
-        ins = SwapTemplate(code, Tenor(tenor), name=f'{code}_{tenor}').to_trade(val_date)
-        ins.set_data(val_date, rate)
+        ins = SwapTemplate(code, Tenor(tenor), name=f'{code}_{tenor}').to_trade(date)
+        ins.set_data(date, rate)
         curve_ins = CurveInstrument(ins)
         if cutoff and ins.end_date <= cutoff:
             curve_ins.exclude_fit = True
@@ -49,21 +50,23 @@ def get_swaps_curve(val_date: dtm.date, code: str, cutoff: dtm.date = None) -> l
     swap_instruments.sort()
     return swap_instruments
 
-def set_step_knots(fut_instruments: list[CurveInstrument], step_dates: list[dtm.date]) -> dtm.date:
-    mdt_i = 0
+def set_step_nodes(fut_instruments: list[CurveInstrument], step_dates: list[dtm.date]) -> dtm.date:
+    dt_i = 0
     for ins in fut_instruments:
-        if ins.underlier.expiry > step_dates[mdt_i] and not ins.exclude_fit:
-            mdt_i += 1
-            if mdt_i >= len(step_dates):
-                logger.info('Step dates end.')
+        if ins.underlier.expiry > step_dates[dt_i] and not ins.exclude_fit:
+            dt_i += 1
+            if dt_i >= len(step_dates):
+                # Skip instrument with too few unknown fixings post step end
+                if (ins.underlier.expiry - last_node).days < 3:
+                    ins.exclude_fit = True
                 break
-            if ins.underlier.expiry > step_dates[mdt_i]:
-                logger.warning(f"{ins.name} Expiry does not fall between step dates")
+            if ins.underlier.expiry > step_dates[dt_i]:
+                logger.info(f"{ins.name} expiry does not fall between step dates")
                 break
-        last_knot = step_dates[mdt_i]
-        ins.set_knot(last_knot)
-    logger.warning(f'Setting step cutoff {last_knot}')
-    return last_knot
+        last_node = step_dates[dt_i]
+        ins.set_node(last_node)
+    logger.warning(f'Setting step cutoff {last_node}')
+    return last_node
 
 def _init():
     global CONFIG_CONTEXT, DATA_CONTEXT
@@ -85,62 +88,61 @@ def _init():
         DATA_CONTEXT.add_fixing_series(code, db_reader.read_fixings(code, from_date=first_date))
 
 
-def construct(val_dt: dtm.date = None):
-    last_val_date = usd_lib.get_last_valuation_date()
+def construct(value_date: dtm.date = None):
+    last_close_date = usd_lib.get_last_trade_date()
     if not CONFIG_CONTEXT:
         _init()
         last_fixing_date = DATA_CONTEXT.get_fixing_series('SOFR').data.get_last_point()[0]
-        if last_val_date > last_fixing_date:
-            logger.error(f"{last_val_date} is after the last available fixing {last_fixing_date}")
-    if not val_dt:
-        val_dt = last_val_date
-    live = val_dt > last_val_date
+        if last_close_date > last_fixing_date:
+            logger.warning(f"{last_close_date} is after the last available fixing {last_fixing_date}")
+    if not value_date:
+        value_date = last_close_date
+    is_live = value_date > last_close_date
     
-    meeting_dates_eff = [dt for dt in CONFIG_CONTEXT.get_meeting_nodes('FED') if dt > val_dt]
+    meeting_nodes = [dt for dt in CONFIG_CONTEXT.get_meeting_nodes('FED') if dt > value_date][:NUM_STEPS]
 
     # SOFR - OIS
     fixing_name = 'SOFR'
-    futs_crv = get_futures_for_curve(val_dt, fixing_code=fixing_name)
-    fut_cutoff = '5y' if live else '30m'
-    fut_cutoff_date = Tenor(fut_cutoff).get_date(val_dt)
+    futs_crv = get_futures_for_curve(value_date, fixing_code=fixing_name)
+    fut_cutoff = '5y' if is_live else '30m'
+    fut_cutoff_date = Tenor(fut_cutoff).get_date(value_date)
     for fi in futs_crv:
         if fi.underlier.expiry > fut_cutoff_date:
             fi.exclude_fit = True
-    mdt_sc = set_step_knots(futs_crv, meeting_dates_eff)
+    step_cutoff = set_step_nodes(futs_crv, meeting_nodes)
     curve_instruments = futs_crv
-    if futs_crv[0].knot > meeting_dates_eff[0]:
-        deposit = Deposit(meeting_dates_eff[0], name=fixing_name)
-        deposit.data[val_dt] = DataContext().get_fixing_series(fixing_name).get(val_dt)
+    if futs_crv[0].node > meeting_nodes[0]:
+        deposit = Deposit(meeting_nodes[0], name=fixing_name)
+        deposit.data[value_date] = DataContext().get_fixing_series(fixing_name).get(value_date)
         curve_instruments = [CurveInstrument(deposit)] + futs_crv
 
-    usd_rate_vol = 1.4/100
-    rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name=f'{fixing_name}-Vol')
-    if not live:
-        swaps = get_swaps_curve(val_dt, 'USD_SOFR', cutoff=fut_cutoff_date)
+    rate_vol_curve = VolCurve(value_date, [(value_date, RATE_VOL)], name=f'{fixing_name}-Vol')
+    if not is_live:
+        swaps = get_swaps_curve(value_date, 'USD_SOFR', cutoff=fut_cutoff_date)
         curve_instruments.extend(swaps)
     curve_defs = [RateCurveModel(curve_instruments,
-                    _interpolation_methods = [(mdt_sc, 'LogLinear'), (None, 'LogCubic')],
+                    _interpolation_methods = [(step_cutoff, 'LogLinear'), (None, 'LogCubic')],
                     _rate_vol_curve=rate_vol_curve, name=fixing_name)]
 
     # Fed fund
     fixing_name = 'EFFR'
-    ff_futs_crv = get_futures_for_curve(val_dt, fixing_code=fixing_name)
-    ff_fut_cutoff = Tenor('13m').get_date(val_dt)
+    ff_futs_crv = get_futures_for_curve(value_date, fixing_code=fixing_name)
+    ff_fut_cutoff = Tenor('13m').get_date(value_date)
     for fi in ff_futs_crv:
         if fi.underlier.expiry > ff_fut_cutoff:
             fi.exclude_fit = True
-    ff_mdt_sc = set_step_knots(ff_futs_crv, meeting_dates_eff)
+    ff_step_cutoff = set_step_nodes(ff_futs_crv, [dt for dt in meeting_nodes if dt <= step_cutoff])
     ff_curve_instruments = ff_futs_crv
-    if ff_futs_crv[0].knot > meeting_dates_eff[0]:
-        ff_deposit = Deposit(meeting_dates_eff[0], name=fixing_name)
-        ff_deposit.data[val_dt] = DataContext().get_fixing_series(fixing_name).get(val_dt)
+    if ff_futs_crv[0].node > meeting_nodes[0]:
+        ff_deposit = Deposit(meeting_nodes[0], name=fixing_name)
+        ff_deposit.data[value_date] = DataContext().get_fixing_series(fixing_name).get(value_date)
         ff_curve_instruments = [CurveInstrument(ff_deposit)] + ff_futs_crv
     
-    ff_rate_vol_curve = VolCurve(val_dt, [(val_dt, usd_rate_vol)], name=f'{fixing_name}-Vol')
-    if not live:
-        ff_swaps = get_swaps_curve(val_dt, code='USD_FF_SOFR', cutoff=ff_fut_cutoff)
+    ff_rate_vol_curve = VolCurve(value_date, [(value_date, RATE_VOL)], name=f'{fixing_name}-Vol')
+    if not is_live:
+        ff_swaps = get_swaps_curve(value_date, code='USD_FF_SOFR', cutoff=ff_fut_cutoff)
         ff_curve_instruments.extend(ff_swaps)
-        ff_interps = [(ff_mdt_sc, 'LogLinear'), (None, 'LogCubic')]
+        ff_interps = [(ff_step_cutoff, 'LogLinear'), (None, 'LogCubic')]
     else:
         ff_interps = [(None, 'LogLinear')]
     ff_curve_defs = [RateCurveModel(ff_curve_instruments,
@@ -149,7 +151,7 @@ def construct(val_dt: dtm.date = None):
                     _collateral_curve_id='USD-SOFR', _spread_from='USD-SOFR', name=fixing_name)]
     
     return [
-        RateCurveGroupModel(val_dt, curve_defs, _calendar=usd_lib.CALENDAR, name='USD'),
-        RateCurveGroupModel(val_dt, ff_curve_defs, _calendar=usd_lib.CALENDAR, name='USD'),
+        RateCurveGroupModel(value_date, curve_defs, _calendar=usd_lib.CALENDAR, name='USD'),
+        RateCurveGroupModel(value_date, ff_curve_defs, _calendar=usd_lib.CALENDAR, name='USD'),
     ]
 

@@ -85,7 +85,7 @@ if __name__ == '__main__':
     start = dtm.date(2024, 10, 1)
     load_bonds_details(start)
     # from markets import usd_lib
-    # for dt in usd_lib.get_valuation_dates(start):
+    # for dt in usd_lib.get_trade_dates(start):
     #     load_bonds_price(dt)
 
 # create_query = f"""CREATE TABLE {BONDS_REF_TABLE} (

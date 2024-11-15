@@ -2,12 +2,14 @@ import dash
 from dash import html, dcc, callback, Output, Input
 import dash_ag_grid as dag
 import datetime as dtm
+import logging
 
 from common.app import style
 from volatility.lib import plotter as vol_plotter
 from volatility.models.vol_types import VolatilityModelType
 import main
 
+logger = logging.Logger(__name__)
 dash.register_page(__name__)
 
 DIV_STYLE = style.get_div_style()
@@ -59,27 +61,30 @@ layout = html.Div([
 def load_options(val_date_str: str, model_type: str, *_):
     try:
         val_date = dtm.date.fromisoformat(val_date_str) if val_date_str else None
-        v_tabvals = []
+        tabvals = []
         for vsm in main.evaluate_option_surfaces(val_date):
             try:
                 vs = vsm.build(model_type)
-                fig = vol_plotter.get_vol_surface_figure(*vsm.get_vols_graph(vs))
+                vs_fig = vol_plotter.get_surface_figure(*vsm.get_vols_graph(vs))
+                gr_fig = vol_plotter.get_surface_figure(*vsm.get_greeks_graph(vs), title='Greeks', mesh_ids=[])
                 rows, colnames = vsm.get_calibration_summary(vs)
             except Exception as ex:
                 print(f'Exception: {ex}')
                 continue
             columns = [dict(field=col) for col in colnames]
             records = [dict(zip(colnames, row)) for row in rows]
-            v_tabvals.append(dcc.Tab(children=[
-                dcc.Graph(figure=fig, style=GRAPH_STYLE),
+            tabvals.append(dcc.Tab(children=[
+                dcc.Graph(figure=vs_fig, style=GRAPH_STYLE),
+                dcc.Graph(figure=gr_fig, style=GRAPH_STYLE),
                 dag.AgGrid(
                     rowData=records, columnDefs=columns,
                     **GRID_STYLE
                 ),
             ], label=vsm.name))
-        return dcc.Tabs(children=v_tabvals), None
+        return dcc.Tabs(children=tabvals), None
     except Exception as ex:
-        return None, ex
+        logger.critical(f'Option surfaces loading failed: {ex}')
+        return None, None
 
 @callback(
     Output(component_id='vol-surfaces', component_property='children'),
@@ -90,23 +95,24 @@ def load_options(val_date_str: str, model_type: str, *_):
 )
 def load_vols(model_type: str, *_):
     try:
-        v_tabvals = []
+        tabvals = []
         for vsm in main.evaluate_vol_surfaces():
             vs = vsm.build(model_type)
-            fig = vol_plotter.get_vol_surface_figure(*vsm.get_vols_graph(vs))
+            fig = vol_plotter.get_surface_figure(*vsm.get_vols_graph(vs))
             rows, colnames = vsm.get_calibration_summary(vs)
             columns = [dict(field=col) for col in colnames]
             for col in columns:
-                if col['field'] in ('Quote', 'Error'):
+                if col['field'] in ('Delta', 'Quote', 'Error'):
                     col.update(dict(valueFormatter=style.get_grid_number_format(',.3%')))
             records = [dict(zip(colnames, row)) for row in rows]
-            v_tabvals.append(dcc.Tab(children=[
+            tabvals.append(dcc.Tab(children=[
                 dcc.Graph(figure=fig, style=GRAPH_STYLE),
                 dag.AgGrid(
                     rowData=records, columnDefs=columns,
                     **GRID_STYLE
                 ),
             ], label=vsm.name))
-        return dcc.Tabs(children=v_tabvals), None
+        return dcc.Tabs(children=tabvals), None
     except Exception as ex:
-        return None, ex
+        logger.critical(f'FX vol surfaces loading failed: {ex}')
+        return None, None

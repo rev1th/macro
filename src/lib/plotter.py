@@ -33,9 +33,9 @@ def get_bonds_curve_figure(bond_data: dict[str, pd.DataFrame], bond_data2: pd.Da
     t_name = 'Name'
     return plotter.get_figure(
         bond_data, data2=bond_data2, title='Bond Curve', text_col=t_name, mode=['lines', 'markers'],
-        x_name=x_name, x_format='%d-%b-%y',
-        y_name=y_name, y_format=',.4%',
-        y2_name=y_name, y2_format=',.4%')
+        x_name=x_name, x_format=DATE_FORMAT,
+        y_name=y_name, y_format=RATE_FORMAT,
+        y2_name=y_name, y2_format=RATE_FORMAT)
 
 def display_bonds_curve(*args, **kwargs) -> None:
     get_bonds_curve_figure(*args, **kwargs).show()

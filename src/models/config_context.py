@@ -8,6 +8,7 @@ from instruments.swap_convention import SwapConvention
 
 
 class ConfigContext(object):
+    # effective rate change dates corresponding to central bank meetings
     _meeting_nodes: dict[str, list[dtm.date]] = {}
     _swap_conventions: dict[str, SwapConvention] = {}
     _rate_futures: dict[str, list[RateFuture]] = {}

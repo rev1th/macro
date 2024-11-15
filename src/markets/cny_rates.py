@@ -33,13 +33,13 @@ def get_swaps_curve(fixing_type: str = 'FR007') -> tuple[dtm.date, list[Domestic
 def get_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwap]]:
     ccy = 'CNY'
     ccy_obj = Currency(ccy)
-    spot_data = cfets_api.load_spot()
-    data_date, fx_data = cfets_api.load_fx()
-    inverse = spot_data[ccy_ref][0].startswith(ccy_ref)
+    # spot_data = cfets_api.load_spot()
+    inverse = True # spot_data[ccy_ref][0].startswith(ccy_ref)
+    data_date, spot_value, fx_data = cfets_api.load_fx()
     spot_settle_date = fx_data[1][2]
     
     spot_ins = FXSpot(ccy_obj, spot_settle_date, _inverse=inverse, name=f'{ccy}_Spot')
-    spot_ins.data[data_date] = spot_data[ccy_ref][1]
+    spot_ins.data[data_date] = spot_value # spot_data[ccy_ref][1]
     
     fxfwd_ins = []
     last_settle_date = None
@@ -47,16 +47,16 @@ def get_fx_curve(ccy_ref: str = 'USD') -> tuple[dtm.date, FXSpot, list[FXSwap]]:
         name = f'{ccy}_{row[0]}'
         exclude_fit = False
         if row[0] == 'ON':
-            ins = FXSwap(ccy_obj, row[2], data_date, _inverse=inverse, _is_ndf=True, name=name)
+            ins = FXSwap(ccy_obj, row[2], data_date, _inverse=inverse, name=name)
             if row[2] == spot_settle_date:
                 exclude_fit = True
         elif row[0] == 'TN':
             # tn_start_date = Tenor(date_lib.CBDay(-1, calendar)).get_date(spot_settle_date)
-            ins = FXSwap(ccy_obj, row[2], last_settle_date, _inverse=inverse, _is_ndf=True, name=name)
+            ins = FXSwap(ccy_obj, row[2], last_settle_date, _inverse=inverse, name=name)
             if last_settle_date == spot_settle_date:
                 exclude_fit = True
         else:
-            ins = FXSwap(ccy_obj, row[2], _inverse=inverse, _is_ndf=True, name=name)
+            ins = FXSwap(ccy_obj, row[2], _inverse=inverse, name=name)
             if row[2] == last_settle_date:
                 exclude_fit = True
         ins.data[data_date] = row[1]
