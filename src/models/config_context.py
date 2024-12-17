@@ -4,7 +4,7 @@ from instruments.bond.coupon_bond import FixCouponBond
 from instruments.bond.inflation_bond import InflationIndexBond
 from instruments.bond.zero_bond import ZeroCouponBond
 from instruments.rate_future import RateFuture
-from instruments.swap_convention import SwapConvention
+from instruments.swap.convention import SwapConvention
 
 
 class ConfigContext(object):

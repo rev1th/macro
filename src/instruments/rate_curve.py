@@ -3,11 +3,10 @@ from pydantic.dataclasses import dataclass
 from dataclasses import InitVar, field
 from typing import ClassVar, Union, Optional
 import datetime as dtm
-import bisect
 import numpy as np
 
 from common.chrono import get_bdate_series, Compounding
-from common.chrono.calendar import Calendar
+from common.chrono.calendar import CalendarID
 from common.chrono.daycount import DayCount
 from common.base_class import NameDateClass
 
@@ -28,7 +27,7 @@ class RateCurve(NameDateClass):
     interpolation_methods: InitVar[list[tuple[dtm.date | int | None, str]]] = field(kw_only=True, default=None)
 
     _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT360)
-    _calendar: Optional[Calendar] = field(kw_only=True, default=None)
+    _calendar: Optional[CalendarID] = field(kw_only=True, default=None)
 
     _nodes: ClassVar[list[RateCurveNode]]
     _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]

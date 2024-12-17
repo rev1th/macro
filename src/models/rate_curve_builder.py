@@ -7,11 +7,11 @@ import numpy as np
 import pandas as pd
 
 from common.base_class import NameClass, NameDateClass
-from common.chrono.tenor import get_bdate_series, Calendar
+from common.chrono.tenor import get_bdate_series, CalendarID
 from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve_instrument import CurveInstrument
-from instruments.fx import FXSpot, FXCurve
+from instruments.fx.swap import FXSpot, FXCurve
 from instruments.rate_curve import RateCurve, SpreadCurve
 from instruments.vol_curve import VolCurve
 from models.curve_context import CurveContext
@@ -195,7 +195,7 @@ class RateCurveModel(NameClass):
 @dataclass
 class RateCurveGroupModel(NameDateClass):
     _models: list[RateCurveModel]
-    _calendar: Calendar
+    _calendar: CalendarID
 
     def __post_init__(self):
         for crv_model in self._models:

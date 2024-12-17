@@ -4,7 +4,7 @@ import logging
 from common.chrono.tenor import Tenor
 from data_api import cme_client, db_reader
 from instruments.rate_curve_instrument import CurveInstrument, Deposit
-from instruments.swap import SwapTemplate
+from instruments.swap.template import SwapTemplate
 from instruments.vol_curve import VolCurve
 from markets import usd_lib
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
@@ -16,6 +16,7 @@ logger = logging.Logger(__name__)
 CONFIG_CONTEXT: ConfigContext = None
 RATE_VOL = 1.4/100
 NUM_STEPS = 8
+MIN_NODE_SPACE = 7
 
 
 def get_futures_for_curve(value_date: dtm.date, fixing_code: str) -> list[CurveInstrument]:
@@ -57,7 +58,7 @@ def set_step_nodes(fut_instruments: list[CurveInstrument], step_dates: list[dtm.
             dt_i += 1
             if dt_i >= len(step_dates):
                 # Skip instrument with too few unknown fixings post step end
-                if (ins.underlier.expiry - last_node).days < 3:
+                if (ins.underlier.expiry - last_node).days < MIN_NODE_SPACE:
                     ins.exclude_fit = True
                 break
             if ins.underlier.expiry > step_dates[dt_i]:

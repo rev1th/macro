@@ -1,10 +1,11 @@
-from common.chrono import Tenor, BDayAdjust, BDayAdjustType
-from common.chrono.calendar import Calendar
-from volatility.models.delta_types import FXDeltaType
+from common.chrono import Tenor
+from common.currency import Currency
+from volatility.models.construct_types import NumeraireConvention
 from volatility.models.fx_vol_surface_construct import FXVolQuote, FXDeltaSlice, FXVolSurfaceConstruct
 from volatility.models.vol_types import VolatilityQuoteType
 
 import data_api.cfets as cfets_api
+from lib import fx_dates as fx_date_lib
 from models.curve_context import CurveContext
 
 
@@ -25,17 +26,14 @@ def get_fx_vols() -> dict[str, list[FXVolQuote]]:
     return data_date, vol_quotes
 
 def construct():
-    calendar = Calendar.CNY
-    settle_tenor = Tenor.bday(2, calendar)
-    bd_adjust = BDayAdjust(BDayAdjustType.Following, calendar)
-
+    currency = Currency.CNY
     value_date, vol_quotes = get_fx_vols()
     fx_curve = CurveContext().get_rate_curve_last('CNY-USD', value_date)
     value_date = fx_curve.date
+    spot_date = fx_date_lib.get_spot_date(currency, value_date)
     slice_data = []
-    for t, quotes in vol_quotes.items():
-        expiry_date = Tenor(t).get_date(value_date, bd_adjust)
-        settle_date = settle_tenor.get_date(expiry_date)
+    for tenor, quotes in vol_quotes.items():
+        expiry_date, settle_date = fx_date_lib.get_forward_dates(currency, Tenor(tenor), spot_date)
         fwd_price = fx_curve.get_forward_price(settle_date)
         slice_data.append(FXDeltaSlice(expiry_date, fwd_price, quotes))
-    return FXVolSurfaceConstruct(value_date, slice_data, FXDeltaType.ForwardPremium, name='USDCNY-Vol')
+    return FXVolSurfaceConstruct(value_date, slice_data, NumeraireConvention.Inverse, name='USDCNY-Vol')

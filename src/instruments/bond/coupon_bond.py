@@ -41,7 +41,7 @@ class FixCouponBond(Bond):
         coupon_dates = self._coupon_frequency.generate_schedule(
             self._first_settle_date, self._maturity_date,
             roll_convention=RollConvention(RollConventionType.EndOfMonth),
-            bd_adjust=BDayAdjust(BDayAdjustType.Following, self.calendar), extended=True)
+            bd_adjust=BDayAdjust(BDayAdjustType.Following, self.calendar), extend_last=True)
         c_dcf = self.get_coupon_dcf()
         self.cashflows = []
         for cd_id in range(1, len(coupon_dates)):

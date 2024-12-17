@@ -1,8 +1,6 @@
-
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 from enum import StrEnum
-from typing import ClassVar
 
 from common.chrono import Tenor, Frequency, BDayAdjust, BDayAdjustType
 from common.chrono.daycount import DayCount

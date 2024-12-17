@@ -130,6 +130,8 @@ def update_bond_futures_list(series: str):
 
 OPT_PROD_CODE_MAP = {
     'SR3': {
+        # '1YM': 'S0',
+        # '2YM': 'S2',
     },
     'ZT': {
         'AME': '26',
@@ -160,6 +162,8 @@ OPT_TYPE_CODE_MAP = {
     'MW1': 'M',
     'WD1': 'W',
     'E21': 'F',
+    '1YM': '1Y',
+    '2YM': '2Y',
 }
 def update_options_list(series: str):
     opt_prod_url = f'{HOME_URL}{OPT_PROD_EP}'.format(code=FUT_PROD_URL_MAP[series])
@@ -173,7 +177,9 @@ def update_options_list(series: str):
         product_id = prod_code_map.get(option_type, series)
         for row in series_info['calendarEntries']:
             product_code = row['productCode']
-            assert product_code.startswith(product_id), f'Invalid product code {product_code}'
+            if not product_code.startswith(product_id):
+                logger.error(f'Invalid product code {product_code} for {product_id}')
+                continue
             contract_code = product_code.replace(product_id, f'{series}{option_type_id}', 1)
             last_trade_date = dtm.datetime.strptime(row['lastTrade'], FUTPROD_DATE_FORMAT)
             if not option_type_id:
@@ -189,7 +195,8 @@ def update_options_list(series: str):
             insert_rows.append("\n("\
     f"'{contract_code}', '{future_code}', '{series}', '{row['contractMonth']}', "\
     f"'{dtm.datetime.strptime(row['firstTrade'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}', "\
-    f"'{last_trade_date.strftime(sql.DATE_FORMAT)}')")
+    f"'{last_trade_date.strftime(sql.DATE_FORMAT)}', "\
+    f"'{dtm.datetime.strptime(row['settlement'], FUTPROD_DATE_FORMAT).strftime(sql.DATE_FORMAT)}')")
     if insert_rows:
         insert_query = f"INSERT OR IGNORE INTO {OPT_PROD_TABLE} VALUES {','.join(insert_rows)};"
         return sql.modify(insert_query, META_DB)
@@ -259,7 +266,7 @@ def load_future_quotes(series: str):
             settle_price = transform_quote(settle_price, price_params)
             expiry_code, expiry_month = quote_i['expirationCode'], quote_i['expirationDate']
             contract_month = f"{series}{expiry_code[0]}{expiry_month[2:4]}"
-            if volume > max_volume * FUT_VOLUME_MIN_MAX and settle_price > 0:
+            if volume > max_volume * FUT_VOLUME_LIMIT_INTRA and settle_price > 0:
                 res[contract_month] = settle_price
     return (trade_date, res)
 
@@ -412,7 +419,7 @@ if __name__ == '__main__':
 
 # create_query = f"""CREATE TABLE {OPT_PROD_TABLE} (
 #     contract_code TEXT, underlier_code TEXT, series_id TEXT, contract_month TEXT,
-#     first_trade_date TEXT, last_trade_date TEXT,
+#     first_trade_date TEXT, last_trade_date TEXT, settlement_date TEXT,
 #     CONSTRAINT {OPT_PROD_TABLE}_pk PRIMARY KEY (contract_code)
 # )"""
 # sql.modify(create_query, META_DB)

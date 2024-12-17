@@ -1,55 +1,9 @@
 from pydantic.dataclasses import dataclass
-from dataclasses import field
 import datetime as dtm
 
-from common.chrono.tenor import Tenor
-from common.currency import Currency
-from common.models.base_instrument import BaseInstrument
 from instruments.rate_curve import RateCurve
-
-
-@dataclass
-class FXBase(BaseInstrument):
-    _ccy1: Currency
-    _ccy2: Currency = field(kw_only=True, default=Currency.USD)
-    _inverse: bool = field(kw_only=True, default=False)
-
-    @property
-    def ccy1(self):
-        return self._ccy1
-    
-    @property
-    def ccy2(self):
-        return self._ccy2
-    
-    @property
-    def inverse(self) -> bool:
-        return self._inverse
-
-@dataclass
-class FXSpot(FXBase):
-    _settle_date: dtm.date
-
-    @classmethod
-    def from_date(ccy: Currency, value_date: dtm.date, **kwargs):
-        return FXSpot(ccy, Tenor.bday(2).get_date(value_date), **kwargs)
-    
-    @property
-    def settle_date(self) -> dtm.date:
-        return self._settle_date
-
-@dataclass
-class FXForward(FXSpot):
-    _expiry: dtm.date
-
-    @classmethod
-    def from_tenor(ccy: Currency, expiry: Tenor, value_date: dtm.date, **kwargs):
-        expiry_date = expiry.get_date(value_date)
-        return FXForward(ccy, expiry_date, **kwargs)
-    
-    @property
-    def expiry(self):
-        return self._expiry
+from .base import FXBase
+from .forward import FXSpot
 
 
 @dataclass

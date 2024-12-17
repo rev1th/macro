@@ -1,14 +1,14 @@
 import datetime as dtm
 
 from common.chrono.daycount import DayCount
-from common.chrono.tenor import Tenor, Calendar
+from common.chrono.tenor import Tenor, CalendarID
 from common.currency import Currency
 
 import data_api.cfets as cfets_api
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
 from instruments.rate_curve_instrument import Deposit, CurveInstrument
-from instruments.swap import SwapTemplate, DomesticSwap
-from instruments.fx import FXSwap, FXSpot
+from instruments.fx.swap import FXSwap, FXSpot
+from instruments.swap.template import SwapTemplate, DomesticSwap
 
 
 def get_swaps_curve(fixing_type: str = 'FR007') -> tuple[dtm.date, list[DomesticSwap]]:
@@ -84,7 +84,7 @@ def construct():
         RateCurveModel(swaps_2, _daycount_type=DayCount.ACT360, _collateral_curve_id='CNY-7DR', name='SHIBOR_3M'),
     ]
     curve_groups = [
-        RateCurveGroupModel(rates_val_date, rates_curve_defs, _calendar=Calendar.CNY, name='CNY'),
-        RateCurveGroupModel(fx_val_date, fx_curve_defs, _calendar=Calendar.CNY, name='CNY'),
+        RateCurveGroupModel(rates_val_date, rates_curve_defs, _calendar=CalendarID.CNY, name='CNY'),
+        RateCurveGroupModel(fx_val_date, fx_curve_defs, _calendar=CalendarID.CNY, name='CNY'),
     ]
     return curve_groups

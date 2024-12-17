@@ -37,7 +37,7 @@ def get_options_contracts(series: str):
 
 
 def get_future_settle_prices(code: str, settle_date: dtm.date):
-    price_query = f"SELECT contract_code, close_price, open_interest FROM {FUTURES_PRICE_TABLE} "\
+    price_query = f"SELECT contract_code, close_price, open_interest, volume FROM {FUTURES_PRICE_TABLE} "\
     f"WHERE contract_code LIKE '{code}%' AND date='{settle_date.strftime(sql.DATE_FORMAT)}'"
     prices_list = sql.fetch(price_query, PRICES_DB)
     if not prices_list:
@@ -51,11 +51,11 @@ def get_future_settle_prices(code: str, settle_date: dtm.date):
             raise ValueError(f"Futures prices not available for {code} on {settle_date}")
         prices_list = sql.fetch(price_query, PRICES_DB)
     res: dict[str, float] = {}
-    max_oi = 0
+    max_oi, max_volume = 0, 0
     for row in prices_list:
-        contract_code, settle_price, oi = row
-        max_oi = max(oi, max_oi)
-        if oi > max_oi * FUT_OI_MIN_MAX:
+        contract_code, settle_price, oi, volume = row
+        max_oi, max_volume = max(oi, max_oi), max(volume, max_volume)
+        if oi > max_oi * FUT_OI_LIMIT or volume > max_volume * FUT_VOLUME_LIMIT:
             res[contract_code] = settle_price
     return res
 

@@ -1,7 +1,7 @@
 import datetime as dtm
 
 from common.models.market_data import OptionDataFlag
-from volatility.instruments.option import CallOption, PutOption
+from volatility.instruments.listed_option import CallOption, PutOption
 from volatility.models.listed_options_construct import ListedOptionsConstruct, ModelStrikeSlice, ModelStrikeLine
 
 from data_api import cme_client

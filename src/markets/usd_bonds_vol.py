@@ -1,7 +1,7 @@
 import datetime as dtm
 
 from common.models.market_data import OptionDataFlag
-from volatility.instruments.option import CallOption, PutOption
+from volatility.instruments.listed_option import CallOption, PutOption
 from volatility.models.listed_options_construct import ListedOptionsConstruct, ModelStrikeSlice, ModelStrikeLine
 
 from data_api import cme_client
@@ -24,10 +24,11 @@ def get_model(series: str, value_date: dtm.date, discount_curve: RateCurve):
         future = futures_map[fut_contract_code]
         if value_date not in future.data or opt_contract_code not in options_data:
             continue
+        expiry_time = dtm.datetime.combine(expiry, usd_lib.CLOSE_TIME)
         strike_slice = []
         for strike, strike_info in options_data[opt_contract_code].items():
-            call_option = CallOption(future, expiry, strike, name=f'{opt_contract_code} C {strike}')
-            put_option = PutOption(future, expiry, strike, name=f'{opt_contract_code} P {strike}')
+            call_option = CallOption(future, expiry_time, strike, name=f'{opt_contract_code} C {strike}')
+            put_option = PutOption(future, expiry_time, strike, name=f'{opt_contract_code} P {strike}')
             call_weight, put_weight = 0, 0
             if OptionDataFlag.CALL in strike_info:
                 call_option.data[value_date], call_weight = strike_info[OptionDataFlag.CALL]

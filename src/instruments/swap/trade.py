@@ -1,43 +1,20 @@
-
 from pydantic.dataclasses import dataclass
-from dataclasses import field, KW_ONLY
+from dataclasses import field
 from typing import ClassVar
 import datetime as dtm
 
-from common.chrono.tenor import Tenor
 from common.models.base_instrument import BaseInstrument
-from instruments.swap_convention import SwapConvention
 from instruments.rate_curve import RateCurve
-from instruments.swap_leg import SwapLeg, SwapFixLeg, SwapFloatLeg
-from models.config_context import ConfigContext
-
-@dataclass
-class SwapTemplate(BaseInstrument):
-    _convention_name: str
-    _end: Tenor
-    # mutable defaults not allowed
-    # https://docs.python.org/3/library/dataclasses.html#default-factory-functions
-    _start: Tenor = field(default_factory=Tenor.bday)
-
-    def __post_init__(self):
-        if not self.name:
-            self.name = f'{self._convention_name}_{self._end}'
-    
-    def to_trade(self, trade_date: dtm.date):
-        convention = ConfigContext().get_swap_convention(self._convention_name)
-        swap_class = BasisSwap if convention.is_basis() else DomesticSwap
-        start_date = self._start.get_date(convention.spot_delay().get_date(trade_date))
-        end_date = self._end.get_date(start_date)
-        return swap_class(convention, start_date, end_date, name=self.name)
+from .convention import SwapConvention
+from .leg import SwapLeg, SwapFixLeg, SwapFloatLeg
 
 @dataclass
 class SwapTrade(BaseInstrument):
     _convention: SwapConvention
     _start_date: dtm.date
     _end_date: dtm.date
-    _: KW_ONLY
-    _notional: float = 1000000
-    _units: float = 1
+    _notional: float = field(kw_only=True, default=1000000)
+    _units: float = field(kw_only=True, default=1)
 
     _leg1: ClassVar[SwapLeg] = None
     _leg2: ClassVar[SwapLeg] = None

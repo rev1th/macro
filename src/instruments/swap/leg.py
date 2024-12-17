@@ -4,9 +4,9 @@ from dataclasses import field
 from typing import ClassVar
 import datetime as dtm
 
-from instruments.swap_convention import SwapLegConvention, SwapFloatLegConvention
 from instruments.rate_curve import RateCurve
 from lib.rate_helper import get_forecast_rate
+from .convention import SwapLegConvention, SwapFloatLegConvention
 
 @dataclass
 class SwapLeg:

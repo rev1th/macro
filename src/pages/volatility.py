@@ -69,7 +69,7 @@ def load_options(val_date_str: str, model_type: str, *_):
                 gr_fig = vol_plotter.get_surface_figure(*vsm.get_greeks_graph(vs), title='Greeks', mesh_ids=[])
                 rows, colnames = vsm.get_calibration_summary(vs)
             except Exception as ex:
-                print(f'Exception: {ex}')
+                logger.error(f'Exception: {ex}')
                 continue
             columns = [dict(field=col) for col in colnames]
             records = [dict(zip(colnames, row)) for row in rows]
@@ -98,7 +98,8 @@ def load_vols(model_type: str, *_):
         tabvals = []
         for vsm in main.evaluate_vol_surfaces():
             vs = vsm.build(model_type)
-            fig = vol_plotter.get_surface_figure(*vsm.get_vols_graph(vs))
+            vs_fig = vol_plotter.get_surface_figure(*vsm.get_vols_graph(vs))
+            gr_fig = vol_plotter.get_surface_figure(*vsm.get_greeks_graph(vs), title='Greeks', mesh_ids=[])
             rows, colnames = vsm.get_calibration_summary(vs)
             columns = [dict(field=col) for col in colnames]
             for col in columns:
@@ -106,7 +107,8 @@ def load_vols(model_type: str, *_):
                     col.update(dict(valueFormatter=style.get_grid_number_format(',.3%')))
             records = [dict(zip(colnames, row)) for row in rows]
             tabvals.append(dcc.Tab(children=[
-                dcc.Graph(figure=fig, style=GRAPH_STYLE),
+                dcc.Graph(figure=vs_fig, style=GRAPH_STYLE),
+                dcc.Graph(figure=gr_fig, style=GRAPH_STYLE),
                 dag.AgGrid(
                     rowData=records, columnDefs=columns,
                     **GRID_STYLE

@@ -6,7 +6,7 @@ from data_api.db_config import META_DB
 from data_api import cme_client, nyfed_client
 from instruments.fixing import RateFixing, RateFixingType
 from instruments.rate_future import RateFutureCompound, RateFutureAverage
-from instruments.swap_convention import SwapConvention, SwapFixLegConvention, SwapFloatLegConvention
+from instruments.swap.convention import SwapConvention, SwapFixLegConvention, SwapFloatLegConvention
 from instruments.bond_future import BondFuture
 
 

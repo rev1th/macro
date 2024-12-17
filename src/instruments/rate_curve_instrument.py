@@ -7,10 +7,10 @@ import logging
 
 from common.models.base_instrument import BaseInstrument
 from common.chrono.tenor import Tenor
-from instruments.fx import FXSwap
+from instruments.fx.swap import FXSwap
 from instruments.rate_curve import RateCurve
 from instruments.rate_future import RateFuture
-from instruments.swap import SwapTrade, DomesticSwap, BasisSwap
+from instruments.swap.trade import SwapTrade, DomesticSwap, BasisSwap
 
 logger = logging.Logger(__name__)
 
