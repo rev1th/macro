@@ -1,5 +1,5 @@
 from pydantic.dataclasses import dataclass
-from typing import ClassVar, Union, Optional
+from dataclasses import field
 import datetime as dtm
 import logging
 from copy import deepcopy
@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from common.base_class import NameClass, NameDateClass
-from common.chrono.tenor import get_bdate_series, CalendarID
+from common.date_helper import get_bdate_series, CalendarID
 from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve_instrument import CurveInstrument
@@ -29,18 +29,18 @@ logger = logging.Logger(__name__)
 class RateCurveModel(NameClass):
 
     _instruments: list[CurveInstrument]
-    _interpolation_methods: list[tuple[Optional[Union[dtm.date, int, str]], str]] = None
+    _interpolation_methods: list[tuple[dtm.date | int | str | None, str]] = None
     _daycount_type: DayCount = None
-    _collateral_curve_id: Optional[str] = None
-    _collateral_spot: Optional[FXSpot] = None
-    _rate_vol_curve: Optional[VolCurve] = None
-    _spread_from: Optional[str] = None
+    _collateral_curve_id: str | None = None
+    _collateral_spot: FXSpot = None
+    _rate_vol_curve: VolCurve = None
+    _spread_from: str | None = None
 
-    _curve: ClassVar[RateCurve]
-    _constructor: ClassVar[NameDateClass]
-    _nodes: ClassVar[list[dtm.date]]
-    _nodes_instruments: ClassVar[dict[dtm.date, list[CurveInstrument]]]
-    _collateral_curve: ClassVar[RateCurve] = None
+    curve: RateCurve = field(init=False)
+    _constructor: NameDateClass = field(init=False)
+    _nodes: list[dtm.date] = field(init=False)
+    _nodes_instruments: dict[dtm.date, list[CurveInstrument]] = field(init=False)
+    _collateral_curve: RateCurve = field(init=False, default=None)
 
     def __post_init__(self):
         nodes_instruments = {}
@@ -49,10 +49,6 @@ class RateCurveModel(NameClass):
                 nodes_instruments.setdefault(ins.node, []).append(ins)
         self._nodes = sorted(nodes_instruments.keys())
         self._nodes_instruments = nodes_instruments
-    
-    @property
-    def curve(self) -> RateCurve:
-        return self._curve
     
     @property
     def date(self) -> dtm.date:
@@ -84,14 +80,14 @@ class RateCurveModel(NameClass):
             kwargs['_domestic_curve'] = self._collateral_curve
         else:
             curve_obj = RateCurve
-        self._curve = curve_obj(
+        self.curve = curve_obj(
             date,
             [(k, 1) for k in self._nodes],
             _calendar = self._constructor._calendar,
             name=f"{self._constructor.name}-{self.name}",
             **kwargs
         )
-        CurveContext().update_rate_curve(self._curve)
+        CurveContext().update_rate_curve(self.curve)
         if self._rate_vol_curve:
             self.set_convexity()
     
@@ -107,7 +103,7 @@ class RateCurveModel(NameClass):
         fwd_rates = []
         prev_rate = None
         for id in range(len(nodes)):
-            rate = self._curve.get_forward_rate(nodes[id], nodes[id] + dtm.timedelta(days=1))
+            rate = self.curve.get_forward_rate(nodes[id], nodes[id] + dtm.timedelta(days=1))
             fwd_rates.append((nodes[id], rate, rate-prev_rate if prev_rate else None))
             prev_rate = rate
         return pd.DataFrame(
@@ -119,13 +115,13 @@ class RateCurveModel(NameClass):
         return instrument.get_pv(self.curve, self._collateral_curve, self._collateral_spot)
     
     def get_bootstrap_node_error(self, value: float, date: dtm.date) -> float:
-        self._curve.update_node(date, value)
+        self.curve.update_node(date, value)
         node_insts = self._nodes_instruments[date]
         assert len(node_insts) > 0, f'No instruments to solve node {date}'
         return self.get_instrument_pv(node_insts[-1])
     
     def get_solver_node_error(self, values: list[float], date: dtm.date) -> float:
-        self._curve.update_node(date, np.exp(values[0]))
+        self.curve.update_node(date, np.exp(values[0]))
         node_insts = self._nodes_instruments[date]
         errors = np.zeros(len(node_insts))
         for ki, ins in enumerate(node_insts):
@@ -135,14 +131,14 @@ class RateCurveModel(NameClass):
     def get_jacobian_node(self, values: list[float], date: dtm.date) -> list[float]:
         node_insts = self._nodes_instruments[date]
         pvs = np.zeros(len(node_insts))
-        self._curve.update_node(date, np.exp(values[0]))
+        self.curve.update_node(date, np.exp(values[0]))
         for ki, inst in enumerate(node_insts):
             pvs[ki] = self.get_instrument_pv(inst)
         
-        dvalue = self._curve.get_dcf(date) * EPSILON
+        dvalue = self.curve.get_dcf(date) * EPSILON
         pvs_up = np.zeros(len(node_insts))
         value_up = values[0] + dvalue
-        self._curve.update_node(date, np.exp(value_up))
+        self.curve.update_node(date, np.exp(value_up))
         for ki, inst in enumerate(node_insts):
             pvs_up[ki] = self.get_instrument_pv(inst)
         # pvs_down = np.zeros(len(node_insts))
@@ -182,7 +178,7 @@ class RateCurveModel(NameClass):
             if inst.is_convexity_swap(node_vol_date):
                 node_vol = self._rate_vol_curve.get_node(node_vol_date)
                 vol_adjusted = inst.get_convexity_adjustment(
-                    self._curve, node_vol_date, node_vol, self._collateral_curve)
+                    self.curve, node_vol_date, node_vol, self._collateral_curve)
                 if vol_adjusted is not None and node_vol != vol_adjusted:
                     self._rate_vol_curve.update_node(node_vol_date, vol_adjusted)
                     return self.calibrate_convexity(node_vol_date)
@@ -194,16 +190,12 @@ class RateCurveModel(NameClass):
 
 @dataclass
 class RateCurveGroupModel(NameDateClass):
-    _models: list[RateCurveModel]
+    models: list[RateCurveModel]
     _calendar: CalendarID
 
     def __post_init__(self):
-        for crv_model in self._models:
+        for crv_model in self.models:
             crv_model._constructor = self
-    
-    @property
-    def models(self) -> list[RateCurveModel]:
-        return self._models
     
     @property
     def curves(self) -> list[RateCurve]:

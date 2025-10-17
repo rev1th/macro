@@ -1,4 +1,4 @@
-from common.chrono import Tenor
+from common.chrono.tenor import Tenor
 from common.currency import Currency
 from volatility.models.construct_types import NumeraireConvention
 from volatility.models.fx_vol_surface_construct import FXVolQuote, FXDeltaSlice, FXVolSurfaceConstruct

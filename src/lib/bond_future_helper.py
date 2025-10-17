@@ -3,7 +3,7 @@ import datetime as dtm
 
 from common import sql
 from common.chrono.tenor import Tenor
-from instruments.bond.coupon_bond import FixCouponBond, CashFlow, BondYieldParameters
+from instruments.bonds.coupon_bond import FixCouponBond, CashFlow, BondYieldParameters
 from instruments.bond_future import BondFutureBond
 from data_api.db_config import META_DB
 

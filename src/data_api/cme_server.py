@@ -19,7 +19,7 @@ MONTH_MAP['JLY'] = MONTH_MAP['JUL']
 DATE_FORMAT = "%m/%d/%Y"
 ENCODE_FORMAT = 'utf-8'
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0',
     'Accept-Language': 'en',
     'Cookie': "",
 }

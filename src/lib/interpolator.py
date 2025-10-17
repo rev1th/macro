@@ -1,6 +1,5 @@
 
 from pydantic.dataclasses import dataclass
-from typing import ClassVar
 import numpy as np
 import bisect
 
@@ -64,7 +63,7 @@ class FlatRate(Interpolator):
 class FlatRateBD(Interpolator):
     _dcfs: list[float]
 
-    _cached_step_rate: ClassVar[dict[tuple[tuple[float, float], tuple[float, float]], float]]
+    _cached_step_rate: dict[tuple[tuple[float, float], tuple[float, float]], float] = field(init=False)
 
     def __post_init__(self, xy_init):
         self.update(xy_init)

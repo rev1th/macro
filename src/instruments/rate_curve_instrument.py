@@ -1,6 +1,5 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import ClassVar
 import datetime as dtm
 import numpy as np
 import logging
@@ -10,7 +9,7 @@ from common.chrono.tenor import Tenor
 from instruments.fx.swap import FXSwap
 from instruments.rate_curve import RateCurve
 from instruments.rate_future import RateFuture
-from instruments.swap.trade import SwapTrade, DomesticSwap, BasisSwap
+from instruments.swaps.trade import SwapTrade, DomesticSwap, BasisSwap
 
 logger = logging.Logger(__name__)
 
@@ -24,7 +23,7 @@ class CurveInstrument:
     _node: dtm.date = None
     _notional: float = field(kw_only=True, default=1000000)
     exclude_fit: bool = field(kw_only=True, default=False)
-    _end: ClassVar[dtm.date]
+    _end: dtm.date = field(init=False)
 
     def __post_init__(self):
         if isinstance(self._underlier, RateFuture):

@@ -21,14 +21,10 @@ class FXSpot(FXBase):
 
 @dataclass
 class FXForward(FXSpot):
-    _expiry: dtm.date
+    expiry: dtm.date
 
     @classmethod
     def from_tenor(ccy: Currency, expiry: Tenor, trade_date: dtm.date, **kwargs):
         spot_date = fx_date_lib.get_spot_date(ccy, trade_date)
         expiry_date, delivery_date = fx_date_lib.get_forward_dates(ccy, expiry, spot_date)
         return FXForward(ccy, delivery_date, expiry_date, **kwargs)
-    
-    @property
-    def expiry(self):
-        return self._expiry

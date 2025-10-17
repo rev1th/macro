@@ -1,4 +1,3 @@
-
 from pydantic.dataclasses import dataclass
 import datetime as dtm
 

@@ -6,7 +6,7 @@ from data_api.db_config import META_DB
 from data_api import cme_client, nyfed_client
 from instruments.fixing import RateFixing, RateFixingType
 from instruments.rate_future import RateFutureCompound, RateFutureAverage
-from instruments.swap.convention import SwapConvention, SwapFixLegConvention, SwapFloatLegConvention
+from instruments.swaps.convention import SwapConvention, SwapFixLegConvention, SwapFloatLegConvention
 from instruments.bond_future import BondFuture
 
 
@@ -22,20 +22,20 @@ def read_IMM_futures(code: str) -> list[RateFutureCompound]:
     expiries = []
     for id in range(1, len(imm_q_list)):
         row = imm_q_list[id]
-        expiries.append(RateFutureCompound(RateFixing(RateFixingType.RFR, name=row[3]), _expiry=row[1],
-                _settle=row[2], _rate_start_date=imm_q_list[id-1][2], _lot_size=row[4], name=row[0]))
+        expiries.append(RateFutureCompound(RateFixing(RateFixingType.RFR, name=row[3]), expiry=row[1],
+                _settle=row[2], _rate_start_date=imm_q_list[id-1][2], lot_size=row[4], name=row[0]))
     return expiries
 
 def read_serial_futures(code: str) -> list[RateFutureAverage]:
     contracts_list = cme_client.get_futures_contracts(code)
-    expiries = [RateFutureAverage(RateFixing(RateFixingType.RFR, name=row[3]), _expiry=row[1], _settle=row[2],
-                _lot_size=row[4], name=row[0]) for row in contracts_list]
+    expiries = [RateFutureAverage(RateFixing(RateFixingType.RFR, name=row[3]), expiry=row[1], _settle=row[2],
+                lot_size=row[4], name=row[0]) for row in contracts_list]
     return expiries
 
 def read_bond_futures(code: str) -> list[BondFuture]:
     contracts_list = cme_client.get_bond_futures_contracts(code)
-    expiries = [BondFuture(_expiry=row[1], _first_delivery=row[2], _last_delivery=row[3],
-                name=row[0]) for row in contracts_list]
+    expiries = [BondFuture(expiry=row[1], _first_delivery=row[2], _last_delivery=row[3], name=row[0])
+                for row in contracts_list]
     return expiries
 
 def read_future_codes(code: str) -> list[str]:

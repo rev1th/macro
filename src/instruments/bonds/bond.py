@@ -1,12 +1,12 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import ClassVar, Self
+from typing import Self
 import datetime as dtm
 from enum import StrEnum
 
 from common.models.base_instrument import BaseInstrument
 from common.models.data_series import DataSeries
-from common.chrono import Tenor, Frequency, Compounding
+from common.chrono.frequency import Tenor, Frequency, Compounding
 from common.chrono.daycount import DayCount
 from instruments.rate_curve import RateCurve
 
@@ -43,8 +43,8 @@ class Bond(BaseInstrument):
     _maturity_date: dtm.date
     _settle_delay: Tenor = field(kw_only=True, default_factory=Tenor.bday)
 
-    cashflows: ClassVar[list[CashFlow]]
-    settle_info: ClassVar[DataSeries[dtm.date, BondSettleInfo]]
+    cashflows: list[CashFlow] = field(init=False)
+    settle_info: DataSeries[dtm.date, BondSettleInfo] = field(init=False)
     
     def __post_init__(self):
         self.settle_info = DataSeries()
@@ -61,7 +61,7 @@ class Bond(BaseInstrument):
     
     def price(self, date: dtm.date) -> float:
         return self.data[date]
-    
+
     def get_cashflows(self, _: dtm.date):
         return self.cashflows
     

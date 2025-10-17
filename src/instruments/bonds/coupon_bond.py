@@ -3,11 +3,12 @@ from dataclasses import field
 import datetime as dtm
 import bisect
 
-from common.chrono import Frequency, BDayAdjust, BDayAdjustType
+from common.chrono.frequency import Frequency
+from common.chrono.badjust import BDayAdjust, BDayAdjustType
 from common.chrono.daycount import DayCount
 from common.chrono.roll import RollConvention, RollConventionType
 from common.numeric import solver
-from instruments.bond.bond import Bond, BondSettleInfo, BondYieldParameters, CashFlow, FACE_VALUE
+from instruments.bonds.bond import Bond, BondSettleInfo, BondYieldParameters, CashFlow, FACE_VALUE
 from instruments.rate_curve import RateCurve
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ class CouponCashFlow(CashFlow):
 @dataclass
 class CouponBondSettleInfo(BondSettleInfo):
     coupon_index: int
-    acrrued_interest: float
+    accrued_interest: float
 
 @dataclass
 class FixCouponBond(Bond):
@@ -75,7 +76,7 @@ class FixCouponBond(Bond):
         return self.cashflows[self.settle_info[date].coupon_index:]
     
     def get_accrued(self, date: dtm.date):
-        return self.settle_info[date].acrrued_interest
+        return self.settle_info[date].accrued_interest
     
     def get_full_price(self, date: dtm.date) -> float:
         return self.price(date) + self.get_accrued(date) * FACE_VALUE
@@ -92,7 +93,7 @@ class FixCouponBond(Bond):
             df /= (1 + yld * yc_dcf) ** (c_dcf / yc_dcf)
             pv += cshf.amount * df
         pv += cashflows[-1].amount * df
-        pv -= settle_info.acrrued_interest
+        pv -= settle_info.accrued_interest
         return pv * FACE_VALUE
     
     def get_price_from_yield(self, date: dtm.date, yld: float, yield_params = BondYieldParameters()) -> float:
@@ -156,7 +157,7 @@ class FixCouponBond(Bond):
             df = yield_params._compounding.get_df(rate + spread, cd_dcf)
             pv += cshf.amount * df
         pv += cashflows[-1].amount * df
-        pv -= settle_info.acrrued_interest
+        pv -= settle_info.accrued_interest
         return pv * FACE_VALUE
     
     def get_price_from_zspread(self, date: dtm.date, spread: float, curve: RateCurve,
@@ -168,7 +169,7 @@ class FixCouponBond(Bond):
         for cshf in self.cashflows[settle_info.coupon_index:]:
             pv += cshf.amount * curve.get_df(cshf.date)
         pv /= curve.get_df(settle_info.date)
-        pv -= settle_info.acrrued_interest
+        pv -= settle_info.accrued_interest
         return pv * FACE_VALUE
     
     def get_price_from_curve(self, date: dtm.date, curve: RateCurve) -> float:

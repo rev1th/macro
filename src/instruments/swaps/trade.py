@@ -1,6 +1,5 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import ClassVar
 import datetime as dtm
 
 from common.models.base_instrument import BaseInstrument
@@ -16,8 +15,8 @@ class SwapTrade(BaseInstrument):
     _notional: float = field(kw_only=True, default=1000000)
     _units: float = field(kw_only=True, default=1)
 
-    _leg1: ClassVar[SwapLeg] = None
-    _leg2: ClassVar[SwapLeg] = None
+    _leg1: SwapLeg = field(init=False)
+    _leg2: SwapLeg = field(init=False)
     
     @property
     def end_date(self):

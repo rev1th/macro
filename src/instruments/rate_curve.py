@@ -1,11 +1,10 @@
-
 from pydantic.dataclasses import dataclass
 from dataclasses import InitVar, field
-from typing import ClassVar, Union, Optional
 import datetime as dtm
 import numpy as np
 
-from common.chrono import get_bdate_series, Compounding
+from common.date_helper import get_bdate_series
+from common.chrono.frequency import Compounding
 from common.chrono.calendar import CalendarID
 from common.chrono.daycount import DayCount
 from common.base_class import NameDateClass
@@ -19,7 +18,7 @@ from instruments.base_types import DataPoint
 class RateCurveNode(DataPoint):
     pass
 
-# __init__ cannot be overriden so we declare InitVar and assign __post_init__
+# __init__ cannot be overridden so we declare InitVar and assign __post_init__
 # https://docs.python.org/3/library/dataclasses.html#init-only-variables
 @dataclass
 class RateCurve(NameDateClass):
@@ -27,10 +26,10 @@ class RateCurve(NameDateClass):
     interpolation_methods: InitVar[list[tuple[dtm.date | int | None, str]]] = field(kw_only=True, default=None)
 
     _daycount_type: DayCount = field(kw_only=True, default=DayCount.ACT360)
-    _calendar: Optional[CalendarID] = field(kw_only=True, default=None)
+    _calendar: CalendarID = field(kw_only=True, default=None)
 
-    _nodes: ClassVar[list[RateCurveNode]]
-    _interpolators: ClassVar[list[tuple[dtm.date, Interpolator]]]
+    _nodes: list[RateCurveNode] = field(init=False)
+    _interpolators: list[tuple[dtm.date, Interpolator]] = field(init=False)
 
     def display_name(self) -> str:
         return f"{self.name}:{self.date.strftime('%d-%b')}"
@@ -57,7 +56,7 @@ class RateCurve(NameDateClass):
         self._interpolators = [None] * len(self._interpolator_classes)
         self._set_interpolators()
 
-    def _get_cutoff_date(self, cutoff: Union[int, dtm.date]) -> dtm.date:
+    def _get_cutoff_date(self, cutoff: int | dtm.date) -> dtm.date:
         if not cutoff:
             return dtm.date.max
         elif isinstance(cutoff, int):
@@ -151,7 +150,7 @@ class RollCurve:
 
 @dataclass
 class RollForwardCurve(RollCurve):
-    _roll_df: ClassVar[float]
+    _roll_df: float = field(init=False)
 
     def __post_init__(self):
         super().__post_init__()
@@ -162,7 +161,7 @@ class RollForwardCurve(RollCurve):
 
 @dataclass
 class RollSpotCurve(RollCurve):
-    _date_delta: ClassVar[dtm.timedelta]
+    _date_delta: dtm.timedelta = field(init=False)
 
     def __post_init__(self):
         super().__post_init__()

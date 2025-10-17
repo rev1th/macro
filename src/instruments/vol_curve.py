@@ -1,7 +1,6 @@
-
 from pydantic.dataclasses import dataclass
+from dataclasses import field
 from dataclasses import InitVar
-from typing import ClassVar
 import datetime as dtm
 
 from common.base_class import NameDateClass
@@ -15,8 +14,8 @@ class VolCurve(NameDateClass):
     nodes_init: InitVar[list[tuple[dtm.date, float]]]
     interpolation_method: InitVar[str] = 'RootMeanSquare'
 
-    _nodes: ClassVar[list[DataPoint]]
-    _interpolator: ClassVar[Interpolator]
+    _nodes: list[DataPoint] = field(init=False)
+    _interpolator: Interpolator = field(init=False)
     
     def __post_init__(self, nodes_init, interpolation_method: str):
         assert len(nodes_init) > 0, "Cannot build vol curve without nodes"

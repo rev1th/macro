@@ -2,7 +2,9 @@ from pydantic.dataclasses import dataclass
 from dataclasses import field
 from enum import StrEnum
 
-from common.chrono import Tenor, Frequency, BDayAdjust, BDayAdjustType
+from common.chrono.tenor import Tenor
+from common.chrono.frequency import Frequency
+from common.chrono.badjust import BDayAdjust, BDayAdjustType
 from common.chrono.daycount import DayCount
 from common.currency import Currency
 from instruments.fixing import RateFixing, RateFixingType

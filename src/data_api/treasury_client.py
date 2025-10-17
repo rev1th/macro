@@ -1,10 +1,10 @@
 import datetime as dtm
 import pandas as pd
 
-from common.chrono import Frequency, Tenor
-from instruments.bond.coupon_bond import FixCouponBond
-from instruments.bond.inflation_bond import InflationIndexBond
-from instruments.bond.zero_bond import ZeroCouponBond
+from common.chrono.frequency import Frequency, Tenor
+from instruments.bonds.coupon_bond import FixCouponBond
+from instruments.bonds.inflation_bond import InflationIndexBond
+from instruments.bonds.zero_bond import ZeroCouponBond
 from instruments.fixing import InflationIndex
 from common import sql
 from common.models.data_series import DataSeries
@@ -13,7 +13,7 @@ from data_api.treasury_config import *
 from data_api import treasury_server as server
 
 
-def get_bonds_price(date: dtm.date) -> dict[str, float]:
+def get_bonds_price(date: dtm.date) -> dict[str, tuple[float, float]]:
     price_query = f"SELECT id, price, buy, sell FROM {BONDS_PRICE_TABLE} WHERE date='{date.strftime(sql.DATE_FORMAT)}'"
     prices_list = sql.fetch(price_query, PRICES_DB)
     if not prices_list:

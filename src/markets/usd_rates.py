@@ -4,7 +4,7 @@ import logging
 from common.chrono.tenor import Tenor
 from data_api import cme_client, db_reader
 from instruments.rate_curve_instrument import CurveInstrument, Deposit
-from instruments.swap.template import SwapTemplate
+from instruments.swaps.template import SwapTemplate
 from instruments.vol_curve import VolCurve
 from markets import usd_lib
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
@@ -15,7 +15,7 @@ logger = logging.Logger(__name__)
 
 CONFIG_CONTEXT: ConfigContext = None
 RATE_VOL = 1.4/100
-NUM_STEPS = 8
+NUM_STEPS = 7
 MIN_NODE_SPACE = 7
 
 

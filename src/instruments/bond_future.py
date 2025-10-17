@@ -1,10 +1,9 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import field
 import datetime as dtm
-from typing import Optional, ClassVar
 
 from common.models.future import Future
-from instruments.bond.coupon_bond import FixCouponBond
+from instruments.bonds.coupon_bond import FixCouponBond
 from instruments.rate_curve import RateCurve
 
 
@@ -13,9 +12,9 @@ class BondFutureBond:
     bond: FixCouponBond
     conversion_factor: float
 
-    ctd_date: Optional[dtm.date] = None
-    repo_rate: ClassVar[float]
-    net_basis: ClassVar[float]
+    ctd_date: dtm.date = field(init=False)
+    repo_rate: float = field(init=False)
+    net_basis: float = field(init=False)
     
     def set_ctd(self, trade_date: dtm.date, fut_price: float, delivery_dates: list[dtm.date], curve: RateCurve) -> None:
         fut_implied = fut_price * self.conversion_factor
@@ -34,7 +33,7 @@ class BondFuture(Future):
     _last_delivery: dtm.date
     _basket_bonds: list[BondFutureBond] = field(kw_only=True, default_factory=list)
 
-    _underlying: Optional[str] = field(init=False, default=None)
+    underlying: str | None = field(init=False, default=None)
     
     def get_basket_metrics(self, date: dtm.date, curve: RateCurve) -> list[BondFutureBond]:
         for bfb in self._basket_bonds:

@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 import datetime as dtm
 
-from instruments.bond.coupon_bond import FixCouponBond, CouponBondSettleInfo, FACE_VALUE
+from instruments.bonds.coupon_bond import FixCouponBond, CouponBondSettleInfo, FACE_VALUE
 from instruments.rate_curve import RateCurve
 from models.data_context import DataContext
 
@@ -22,7 +22,7 @@ class InflationIndexBond(FixCouponBond):
     def get_settle_info(self, settle_date: dtm.date):
         coupon_info = super().get_settle_info(settle_date)
         return InflationBondSettleInfo(settle_date, coupon_info.coupon_index,
-            coupon_info.acrrued_interest, self.get_inflation_value(settle_date))
+            coupon_info.accrued_interest, self.get_inflation_value(settle_date))
     
     def get_full_price(self, date: dtm.date) -> float:
         index_ratio = self.settle_info[date].inflation_value / self._base_index_value
@@ -34,7 +34,7 @@ class InflationIndexBond(FixCouponBond):
         for cshf in self.cashflows[settle_info.coupon_index:]:
             pv += cshf.amount * nominal_curve.get_df(cshf.date) / inflation_curve.get_df(cshf.date)
         pv /= nominal_curve.get_df(settle_info.date)
-        pv -= settle_info.acrrued_interest
+        pv -= settle_info.accrued_interest
         return pv * FACE_VALUE
     
     def get_price_from_curve_inflation(self, date: dtm.date,

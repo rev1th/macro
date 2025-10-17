@@ -1,10 +1,10 @@
 import datetime as dtm
 from instruments.bond_future import BondFuture
-from instruments.bond.coupon_bond import FixCouponBond
-from instruments.bond.inflation_bond import InflationIndexBond
-from instruments.bond.zero_bond import ZeroCouponBond
+from instruments.bonds.coupon_bond import FixCouponBond
+from instruments.bonds.inflation_bond import InflationIndexBond
+from instruments.bonds.zero_bond import ZeroCouponBond
 from instruments.rate_future import RateFuture
-from instruments.swap.convention import SwapConvention
+from instruments.swaps.convention import SwapConvention
 
 
 class ConfigContext(object):

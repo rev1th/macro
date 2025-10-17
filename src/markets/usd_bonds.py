@@ -1,7 +1,7 @@
 import logging
 import datetime as dtm
 
-from common.chrono import Tenor
+from common.chrono.tenor import Tenor
 from data_api import treasury_client as tsy_client
 from data_api.treasury_config import SERIES_ID
 from markets import usd_lib

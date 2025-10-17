@@ -5,4 +5,5 @@ __pycache__/
 data/
 cpp/
 .vscode/
+.idea/
 src/server.py

@@ -1,7 +1,5 @@
-
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import ClassVar
 import datetime as dtm
 
 from instruments.rate_curve import RateCurve
@@ -15,8 +13,8 @@ class SwapLeg:
     _end_date: dtm.date
     _notional: float
 
-    coupon_dates: ClassVar[list[dtm.date]]
-    coupon_pay_dates: ClassVar[list[dtm.date]]
+    coupon_dates: list[dtm.date] = field(init=False)
+    coupon_pay_dates: list[dtm.date] = field(init=False)
     
     def __post_init__(self):
         self.coupon_dates = self._convention.coupon_frequency.generate_schedule(
@@ -62,7 +60,7 @@ class SwapFloatLeg(SwapLeg):
     _convention: SwapFloatLegConvention
     _spread: float = field(init=False, default=0)
 
-    fixing_periods: ClassVar[list[list[tuple[dtm.date, dtm.date], tuple[dtm.date, dtm.date]]]]
+    fixing_periods: list[tuple[tuple[dtm.date, dtm.date], tuple[dtm.date, dtm.date]]] = field(init=False)
     
     def __post_init__(self):
         super().__post_init__()

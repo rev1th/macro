@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 import datetime as dtm
 
-from instruments.bond.bond import Bond, BondSettleInfo, BondYieldParameters, CashFlow, FACE_VALUE
+from instruments.bonds.bond import Bond, BondSettleInfo, BondYieldParameters, CashFlow, FACE_VALUE
 from instruments.rate_curve import RateCurve
 
 @dataclass

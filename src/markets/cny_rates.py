@@ -8,7 +8,7 @@ import data_api.cfets as cfets_api
 from models.rate_curve_builder import RateCurveModel, RateCurveGroupModel
 from instruments.rate_curve_instrument import Deposit, CurveInstrument
 from instruments.fx.swap import FXSwap, FXSpot
-from instruments.swap.template import SwapTemplate, DomesticSwap
+from instruments.swaps.template import SwapTemplate, DomesticSwap
 
 
 def get_swaps_curve(fixing_type: str = 'FR007') -> tuple[dtm.date, list[DomesticSwap]]:

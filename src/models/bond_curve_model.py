@@ -1,5 +1,5 @@
 from pydantic.dataclasses import dataclass
-from typing import ClassVar
+from dataclasses import field
 import numpy as np
 import statsmodels.api as sm
 import pandas as pd
@@ -10,7 +10,7 @@ from common.chrono.tenor import Tenor
 from common.chrono.daycount import DayCount
 from common.numeric import solver
 from instruments.rate_curve import SpreadCurve, RateCurveNode, RollForwardCurve
-from instruments.bond.bond import Bond, BondYieldParameters
+from instruments.bonds.bond import Bond, BondYieldParameters
 from models.curve_context import CurveContext
 
 
@@ -66,7 +66,7 @@ class BondCurveModelNS(BondCurveModel):
     _decay_rate: float = 1
     _daycount: DayCount = DayCount.ACT365
 
-    spread_curve: ClassVar[BondCurveNS]
+    spread_curve: BondCurveNS = field(init=False)
 
     def get_factor_params(self):
         xs = []
@@ -93,7 +93,7 @@ class BondCurveModelNS(BondCurveModel):
 class BondCurveModelNP(BondCurveModel):
     _node_tenors: list[str] | None
 
-    spread_curve: ClassVar[SpreadCurve]
+    spread_curve: SpreadCurve = field(init=False)
 
     def __post_init__(self):
         wsum = sum(wi for _, wi in self._bonds)

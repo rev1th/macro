@@ -1,6 +1,6 @@
 import datetime as dtm
 
-from common.chrono import get_bdate_series
+from common.date_helper import get_bdate_series
 from instruments.rate_curve import RateCurve
 from instruments.fixing import RateFixing
 from models.data_context import DataContext

@@ -1,12 +1,12 @@
 
 from pydantic.dataclasses import dataclass
 from dataclasses import field
-from typing import ClassVar
 import datetime as dtm
 import numpy as np
 
 from common.models.future import Future
-from common.chrono.tenor import Tenor, get_bdate_series
+from common.date_helper import get_bdate_series
+from common.chrono.tenor import Tenor
 from common.chrono.daycount import DayCount
 from instruments.rate_curve import RateCurve
 from instruments.vol_curve import VolCurve
@@ -20,7 +20,7 @@ class RateFuture(Future):
     _rate_start_date: dtm.date
     _rate_end_date: dtm.date = None
 
-    _convexity: ClassVar[float]
+    _convexity: float = field(init=False)
     
     @property
     def settle_date(self):
